@@ -1,4 +1,4 @@
-import { access, mkdir, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -100,6 +100,176 @@ describe("loadRuntimeConfig", () => {
     });
   });
 
+  it("workspace に templates の不足ファイルを補完する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    const templatesDir = await createTempTemplatesDir({
+      "LUNA.md": "LUNA template",
+      "SOUL.md": "SOUL template",
+    });
+    try {
+      await loadRuntimeConfig(
+        {
+          ALLOWED_CHANNEL_IDS: "111",
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        },
+        {
+          templatesDir,
+        },
+      );
+
+      expect(await readFile(resolve(lunaHomeDir, "workspace", "LUNA.md"), "utf8")).toBe(
+        "LUNA template",
+      );
+      expect(await readFile(resolve(lunaHomeDir, "workspace", "SOUL.md"), "utf8")).toBe(
+        "SOUL template",
+      );
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("workspace に既存ファイルがあれば templates で上書きしない", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    const workspaceDir = resolve(lunaHomeDir, "workspace");
+    const templatesDir = await createTempTemplatesDir({
+      "LUNA.md": "LUNA template",
+      "SOUL.md": "SOUL template",
+    });
+    await mkdir(workspaceDir, {
+      recursive: true,
+    });
+    await writeFile(resolve(workspaceDir, "LUNA.md"), "custom LUNA");
+
+    try {
+      await loadRuntimeConfig(
+        {
+          ALLOWED_CHANNEL_IDS: "111",
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        },
+        {
+          templatesDir,
+        },
+      );
+
+      expect(await readFile(resolve(workspaceDir, "LUNA.md"), "utf8")).toBe("custom LUNA");
+      expect(await readFile(resolve(workspaceDir, "SOUL.md"), "utf8")).toBe("SOUL template");
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("templates 直下の通常ファイルのみを workspace へ補完する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    const templatesDir = await createTempTemplatesDir({
+      "LUNA.md": "LUNA template",
+    });
+    const nestedDir = resolve(templatesDir, "nested");
+    await mkdir(nestedDir, {
+      recursive: true,
+    });
+    await writeFile(resolve(nestedDir, "SOUL.md"), "nested");
+
+    try {
+      await loadRuntimeConfig(
+        {
+          ALLOWED_CHANNEL_IDS: "111",
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        },
+        {
+          templatesDir,
+        },
+      );
+
+      expect(await exists(resolve(lunaHomeDir, "workspace", "LUNA.md"))).toBe(true);
+      expect(await exists(resolve(lunaHomeDir, "workspace", "nested"))).toBe(false);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("templates ディレクトリが存在しない場合は失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    const missingTemplatesDir = createTempLunaHomeDir();
+    try {
+      await expect(
+        loadRuntimeConfig(
+          {
+            ALLOWED_CHANNEL_IDS: "111",
+            LUNA_HOME: lunaHomeDir,
+            DISCORD_BOT_TOKEN: "token",
+          },
+          {
+            templatesDir: missingTemplatesDir,
+          },
+        ),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("workspace の同名パスがファイル以外なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    const workspaceDir = resolve(lunaHomeDir, "workspace");
+    const templatesDir = await createTempTemplatesDir({
+      "LUNA.md": "LUNA template",
+    });
+    await mkdir(resolve(workspaceDir, "LUNA.md"), {
+      recursive: true,
+    });
+
+    try {
+      await expect(
+        loadRuntimeConfig(
+          {
+            ALLOWED_CHANNEL_IDS: "111",
+            LUNA_HOME: lunaHomeDir,
+            DISCORD_BOT_TOKEN: "token",
+          },
+          {
+            templatesDir,
+          },
+        ),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("ALLOWED_CHANNEL_IDS が空なら失敗する", async () => {
     await expect(
       loadRuntimeConfig({
@@ -120,6 +290,22 @@ describe("loadRuntimeConfig", () => {
 
 function createTempLunaHomeDir(): string {
   return resolve(join(tmpdir(), `luna-runtime-config-${Date.now()}-${Math.random().toString(16)}`));
+}
+
+async function createTempTemplatesDir(files: Record<string, string>): Promise<string> {
+  const templatesDir = resolve(
+    join(tmpdir(), `luna-runtime-config-templates-${Date.now()}-${Math.random().toString(16)}`),
+  );
+  await mkdir(templatesDir, {
+    recursive: true,
+  });
+  await Promise.all(
+    Object.entries(files).map(async ([fileName, content]) => {
+      await writeFile(resolve(templatesDir, fileName), content);
+    }),
+  );
+
+  return templatesDir;
 }
 
 async function exists(path: string): Promise<boolean> {

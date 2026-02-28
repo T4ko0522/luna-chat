@@ -27,7 +27,8 @@ ALLOWED_CHANNEL_IDS=123456789012345678,234567890123456789
 LUNA_HOME=~/.luna
 ```
 
-`LUNA_HOME` は起動時に自動作成され、`$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` も自動で準備されます。
+`LUNA_HOME` は起動時に自動作成され、`$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` も自動で準備されます。  
+さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。
 
 3. Codex の設定・認証を準備
 

@@ -38,6 +38,7 @@ RUN npm install --global @openai/codex@0.106.0
 COPY --from=build /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY package.json ./
+COPY templates ./templates
 
 USER node
 

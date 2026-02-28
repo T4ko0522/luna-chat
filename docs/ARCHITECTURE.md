@@ -34,6 +34,7 @@
 - `src/modules/runtime-config/runtime-config.ts`
   - 環境変数検証（`DISCORD_BOT_TOKEN` / `ALLOWED_CHANNEL_IDS` / `LUNA_HOME`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
+  - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
 - `src/shared/logger.ts`
   - 共通 logger（標準出力 + `$LUNA_HOME/logs/*.log` JSONL 出力）
 - `src/shared/discord/message-author-label.ts`
@@ -178,6 +179,7 @@
 - `ALLOWED_CHANNEL_IDS`: 必須（カンマ区切り）
 - `LUNA_HOME`: 任意（未設定時 `~/.luna`）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
+- 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
 
 ## 8. エラーハンドリング
 

@@ -1,4 +1,4 @@
-import { access, constants, mkdir, stat } from "node:fs/promises";
+import { access, constants, copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -6,6 +6,7 @@ const DEFAULT_LUNA_HOME = "~/.luna";
 const WORKSPACE_DIR_NAME = "workspace";
 const CODEX_HOME_DIR_NAME = "codex";
 const LOGS_DIR_NAME = "logs";
+const DEFAULT_TEMPLATES_DIR_NAME = "templates";
 
 export type RuntimeConfig = {
   discordBotToken: string;
@@ -23,8 +24,13 @@ export class RuntimeConfigError extends Error {
   }
 }
 
+type LoadRuntimeConfigOptions = {
+  templatesDir?: string;
+};
+
 export async function loadRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env,
+  options: LoadRuntimeConfigOptions = {},
 ): Promise<RuntimeConfig> {
   const discordBotToken = env["DISCORD_BOT_TOKEN"]?.trim();
   if (!discordBotToken) {
@@ -41,6 +47,10 @@ export async function loadRuntimeConfig(
   await ensureDirectoryReady(codexWorkspaceDir, "workspace must be a writable directory.");
   await ensureDirectoryReady(codexHomeDir, "codex home must be a writable directory.");
   await ensureDirectoryReady(logsDir, "logs directory must be a writable directory.");
+  await seedWorkspaceTemplatesIfMissing(
+    codexWorkspaceDir,
+    resolveTemplatesDir(options.templatesDir),
+  );
 
   return {
     allowedChannelIds,
@@ -66,6 +76,15 @@ function parseAllowedChannelIds(rawAllowedChannelIds: string | undefined): Reado
   }
 
   return new Set(allowedChannelIds);
+}
+
+function resolveTemplatesDir(rawTemplatesDir: string | undefined): string {
+  const configuredTemplatesDir = rawTemplatesDir?.trim();
+  if (configuredTemplatesDir && configuredTemplatesDir.length > 0) {
+    return resolve(configuredTemplatesDir);
+  }
+
+  return resolve(process.cwd(), DEFAULT_TEMPLATES_DIR_NAME);
 }
 
 function resolveLunaHome(rawLunaHome: string | undefined): string {
@@ -98,5 +117,66 @@ async function ensureDirectoryReady(path: string, message: string): Promise<void
     await access(path, constants.W_OK);
   } catch {
     throw new RuntimeConfigError(message);
+  }
+}
+
+async function seedWorkspaceTemplatesIfMissing(
+  workspaceDir: string,
+  templatesDir: string,
+): Promise<void> {
+  const templateFiles = await listTemplateFiles(templatesDir);
+  await Promise.all(
+    templateFiles.map(async (fileName) => {
+      const sourcePath = resolve(templatesDir, fileName);
+      const destinationPath = resolve(workspaceDir, fileName);
+      const destinationType = await detectPathType(destinationPath);
+
+      if (destinationType === "file") {
+        return;
+      }
+      if (destinationType === "non-file") {
+        throw new RuntimeConfigError(
+          `workspace template destination must be a file path: ${destinationPath}`,
+        );
+      }
+
+      try {
+        await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL);
+      } catch {
+        throw new RuntimeConfigError(`failed to copy template file: ${fileName}`);
+      }
+    }),
+  );
+}
+
+async function listTemplateFiles(templatesDir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(templatesDir, {
+      withFileTypes: true,
+    });
+    const files = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .sort();
+
+    if (files.length === 0) {
+      throw new RuntimeConfigError("templates directory must include at least one file.");
+    }
+
+    return files;
+  } catch (error: unknown) {
+    if (error instanceof RuntimeConfigError) {
+      throw error;
+    }
+    throw new RuntimeConfigError("templates directory must be readable.");
+  }
+}
+
+async function detectPathType(path: string): Promise<"missing" | "file" | "non-file"> {
+  try {
+    const stats = await stat(path);
+    return stats.isFile() ? "file" : "non-file";
+  } catch {
+    return "missing";
   }
 }

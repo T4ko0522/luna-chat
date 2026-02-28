@@ -40,6 +40,7 @@
 - AI 呼び出し失敗時はフォールバック返信せず、ログ記録のみで終了する。
 - 設定は `DISCORD_BOT_TOKEN` / `ALLOWED_CHANNEL_IDS` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
+- 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。
 - `thread/start` は `ephemeral=true` / `personality="friendly"` を使用し、Discord MCP URLを `config.mcp_servers.discord.url` へ注入する。
 - server-initiated request のうち、approval 系は `decline` 応答、`requestUserInput` は辞退選択肢を返す。
@@ -61,6 +62,7 @@
 5. heartbeat を定期実行する。
 6. 本体コードと `$LUNA_HOME/workspace` を分離する。
 7. `STATUS.md` は作業ごとに AI が更新する。
+8. `templates` 直下の通常ファイルは起動時に `workspace` へ不足分のみ補完する。
 
 ## 4. 直近タスク
 

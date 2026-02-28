@@ -32,6 +32,7 @@
 2. `ALLOWED_CHANNEL_IDS` が 1 件以上設定されていることを確認する。
 3. `LUNA_HOME` 未設定時は `~/.luna` を使用することを確認する。
 4. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
+5. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
 
 ### 3.2 開発時コマンド
 
