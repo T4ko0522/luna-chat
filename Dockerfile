@@ -25,19 +25,15 @@ FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
-FROM node:24.13.1-trixie-slim AS runtime
+FROM node:24.13.1-trixie AS runtime
 
 ENV NODE_ENV=production
 ENV LUNA_HOME=/home/node/.luna
 
 WORKDIR /app
 
-RUN \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    apt-get update && apt-get install -y git
 RUN git config --global user.name "Luna" && git config --global user.email "luna@s2n.tech"
-RUN npm install --global @openai/codex@0.104.0
+RUN npm install --global @openai/codex@0.106.0
 
 COPY --from=build /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
@@ -45,4 +41,4 @@ COPY package.json ./
 
 USER node
 
-CMD ["node", "./dist/index.mjs"]
+CMD ["./dist/index.mjs"]
