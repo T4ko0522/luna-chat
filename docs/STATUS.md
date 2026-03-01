@@ -48,7 +48,8 @@
 - heartbeat と cron prompt のタイムゾーンは `$LUNA_HOME/config.toml` のトップレベル `time_zone` から読み込む（未設定時はシステムタイムゾーン）。
 - `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`, `heartbeat.cron_time = "0 0,30 * * * *"` で起動継続する。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
-- 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
+- 起動時に `templates` 配下の通常ファイルを再帰的に `workspace` へ不足分のみコピーし、既存ファイルは上書きしない（空ディレクトリは許容）。
+- 起動時に `templates` 配下にシンボリックリンクが含まれる場合は失敗する。
 - 起動時に `templates/cron.toml` が `workspace/cron.toml` へ不足分のみ補完される（既存は上書きしない）。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。
 - `thread/start` は `ephemeral=true` / `personality="friendly"` を使用し、Discord MCP URLを `config.mcp_servers.discord.url` へ注入する。
@@ -77,7 +78,7 @@
 6. cron prompt を `workspace/cron.toml` で定期実行する。
 7. 本体コードと `$LUNA_HOME/workspace` を分離する。
 8. `STATUS.md` は作業ごとに AI が更新する。
-9. `templates` 直下の通常ファイルは起動時に `workspace` へ不足分のみ補完する。
+9. `templates` 配下の通常ファイルは起動時に再帰的に `workspace` へ不足分のみ補完する（空ディレクトリは許容、シンボリックリンクは不可）。
 
 ## 4. 直近タスク
 

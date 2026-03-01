@@ -38,7 +38,7 @@
   - `config.toml` の `[heartbeat].cron_time` / トップレベル `time_zone` 読み込み（`confbox`）
   - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`, `heartbeat.cron_time = "0 0,30 * * * *"`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
-  - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
+  - `templates` 配下の通常ファイルを再帰的に `workspace` へ不足分のみ自動コピー（既存は非上書き、空ディレクトリは許容、シンボリックリンクは起動エラー）
 - `src/shared/logger.ts`
   - 共通 logger（標準出力 + `$LUNA_HOME/logs/*.log` JSONL 出力）
 - `src/shared/discord/message-author-label.ts`
@@ -214,7 +214,7 @@
     - `prompt`: AI へ渡す user prompt（必須）
     - `oneshot`: boolean（任意、既定 `false`）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
-- 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
+- 起動時に `templates` 配下の通常ファイルを再帰的に `$LUNA_HOME/workspace` へ不足分のみコピーする（空ディレクトリは許容、シンボリックリンクは起動エラー）
 
 ## 8. エラーハンドリング
 

@@ -41,7 +41,7 @@
 7. `config.toml` の `[heartbeat].cron_time`（cron 文字列）を必要に応じて設定する（未設定時は `0 0,30 * * * *`）。
 8. 必要時のみ `time_zone`（IANA タイムゾーン）を設定する（未設定時はシステムタイムゾーン）。
 9. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
-10. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
+10. 起動時に `templates` 配下の通常ファイルが再帰的に `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する（空ディレクトリは許容、シンボリックリンクは不可）。
 11. `$LUNA_HOME/workspace/cron.toml` が存在することを確認する（初回起動でテンプレート作成される）。
 
 ### 3.2 開発時コマンド

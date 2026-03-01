@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { parseTOML, stringifyTOML } from "confbox";
 import { CronTime } from "cron";
@@ -300,9 +300,10 @@ async function seedWorkspaceTemplatesIfMissing(
 ): Promise<void> {
   const templateFiles = await listTemplateFiles(templatesDir);
   await Promise.all(
-    templateFiles.map(async (fileName) => {
-      const sourcePath = resolve(templatesDir, fileName);
-      const destinationPath = resolve(workspaceDir, fileName);
+    templateFiles.map(async (relativeFilePath) => {
+      const sourcePath = resolve(templatesDir, relativeFilePath);
+      const destinationPath = resolve(workspaceDir, relativeFilePath);
+      await ensureTemplateDestinationParentDirectory(destinationPath);
       const destinationType = await detectPathType(destinationPath);
 
       if (destinationType === "file") {
@@ -317,33 +318,75 @@ async function seedWorkspaceTemplatesIfMissing(
       try {
         await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL);
       } catch {
-        throw new RuntimeConfigError(`failed to copy template file: ${fileName}`);
+        throw new RuntimeConfigError(`failed to copy template file: ${relativeFilePath}`);
       }
     }),
   );
 }
 
+async function ensureTemplateDestinationParentDirectory(destinationPath: string): Promise<void> {
+  const destinationParentDir = dirname(destinationPath);
+  try {
+    await mkdir(destinationParentDir, {
+      recursive: true,
+    });
+    if (!(await stat(destinationParentDir)).isDirectory()) {
+      throw new RuntimeConfigError(
+        `workspace template destination parent must be a directory: ${destinationParentDir}`,
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof RuntimeConfigError) {
+      throw error;
+    }
+    throw new RuntimeConfigError(
+      `failed to prepare workspace template destination directory: ${destinationParentDir}`,
+    );
+  }
+}
+
 async function listTemplateFiles(templatesDir: string): Promise<string[]> {
   try {
-    const entries = await readdir(templatesDir, {
-      withFileTypes: true,
-    });
-    const files = entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name)
-      .sort();
-
-    if (files.length === 0) {
-      throw new RuntimeConfigError("templates directory must include at least one file.");
-    }
-
-    return files;
+    const files = await listTemplateFilesRecursively(templatesDir, "");
+    return files.sort();
   } catch (error: unknown) {
     if (error instanceof RuntimeConfigError) {
       throw error;
     }
     throw new RuntimeConfigError("templates directory must be readable.");
   }
+}
+
+async function listTemplateFilesRecursively(
+  templatesDir: string,
+  relativeDir: string,
+): Promise<string[]> {
+  const currentDir = relativeDir.length === 0 ? templatesDir : resolve(templatesDir, relativeDir);
+  const entries = await readdir(currentDir, {
+    withFileTypes: true,
+  });
+
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relativePath = relativeDir.length === 0 ? entry.name : join(relativeDir, entry.name);
+    const absolutePath = resolve(templatesDir, relativePath);
+
+    if (entry.isSymbolicLink()) {
+      throw new RuntimeConfigError(
+        `templates directory must not include symbolic links: ${absolutePath}`,
+      );
+    }
+    if (entry.isDirectory()) {
+      const nestedFiles = await listTemplateFilesRecursively(templatesDir, relativePath);
+      files.push(...nestedFiles);
+      continue;
+    }
+    if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
 }
 
 async function detectPathType(path: string): Promise<"missing" | "file" | "non-file"> {

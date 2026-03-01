@@ -52,7 +52,7 @@ cron_time = "0 0,30 * * * *"
 `allowed_channel_ids = []`（空配列）でも起動は継続し、その場合 Bot はどのチャンネルにも反応しません。  
 `allow_dm = false` では DM に無反応、`allow_dm = true` では DM 投稿も AI 処理対象になります。  
 `[ai]` を省略した場合は `model="gpt-5.3-codex"` / `reasoning_effort="medium"` が使われます。  
-さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。  
+さらに `templates` 配下の通常ファイルは再帰的に走査され、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。シンボリックリンクが含まれる場合は起動エラーになります。  
 `$LUNA_HOME/workspace/cron.toml` では任意プロンプトの定期実行を設定できます。`[jobs.<id>]` 形式で `cron` / `prompt` / `oneshot` を指定します。`oneshot = true` のジョブは1回試行後に設定ファイルから自動削除されます。`cron.toml` の変更は `chokidar` で監視され、再起動なしで反映されます。
 
 ```toml

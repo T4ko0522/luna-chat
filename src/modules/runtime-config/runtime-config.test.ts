@@ -1,6 +1,6 @@
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { parseTOML } from "confbox";
 import { describe, expect, it } from "vitest";
@@ -352,7 +352,7 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
-  it("templates 直下の通常ファイルのみを workspace へ補完する", async () => {
+  it("templates 配下の通常ファイルを再帰で workspace へ補完する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
     await writeConfigToml(
       lunaHomeDir,
@@ -381,7 +381,56 @@ describe("loadRuntimeConfig", () => {
       );
 
       expect(await exists(resolve(lunaHomeDir, "workspace", "LUNA.md"))).toBe(true);
-      expect(await exists(resolve(lunaHomeDir, "workspace", "nested"))).toBe(false);
+      expect(await readFile(resolve(lunaHomeDir, "workspace", "nested", "SOUL.md"), "utf8")).toBe(
+        "nested",
+      );
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("workspace に既存ディレクトリ/ファイルがあれば templates 配下でも上書きしない", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+    const workspaceDir = resolve(lunaHomeDir, "workspace");
+    const templatesDir = await createTempTemplatesDir({
+      "nested/LUNA.md": "template nested LUNA",
+      "nested/SOUL.md": "template nested SOUL",
+    });
+    await mkdir(resolve(workspaceDir, "nested"), {
+      recursive: true,
+    });
+    await writeFile(resolve(workspaceDir, "nested", "LUNA.md"), "custom nested LUNA");
+
+    try {
+      await loadRuntimeConfig(
+        {
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        },
+        {
+          templatesDir,
+        },
+      );
+
+      expect(await readFile(resolve(workspaceDir, "nested", "LUNA.md"), "utf8")).toBe(
+        "custom nested LUNA",
+      );
+      expect(await readFile(resolve(workspaceDir, "nested", "SOUL.md"), "utf8")).toBe(
+        "template nested SOUL",
+      );
     } finally {
       await rm(lunaHomeDir, {
         force: true,
@@ -423,6 +472,78 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
+  it("templates が空ディレクトリでも起動継続する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+    const templatesDir = await createTempTemplatesDir({});
+
+    try {
+      await expect(
+        loadRuntimeConfig(
+          {
+            LUNA_HOME: lunaHomeDir,
+            DISCORD_BOT_TOKEN: "token",
+          },
+          {
+            templatesDir,
+          },
+        ),
+      ).resolves.toBeDefined();
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("templates 配下にシンボリックリンクがあれば失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+    const templatesDir = await createTempTemplatesDir({
+      "LUNA.md": "LUNA template",
+      "targets/SOUL.md": "target",
+    });
+    await symlink(resolve(templatesDir, "targets", "SOUL.md"), resolve(templatesDir, "SOUL.link"));
+
+    try {
+      await expect(
+        loadRuntimeConfig(
+          {
+            LUNA_HOME: lunaHomeDir,
+            DISCORD_BOT_TOKEN: "token",
+          },
+          {
+            templatesDir,
+          },
+        ),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("workspace の同名パスがファイル以外なら失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
     await writeConfigToml(
@@ -438,6 +559,47 @@ describe("loadRuntimeConfig", () => {
     await mkdir(resolve(workspaceDir, "LUNA.md"), {
       recursive: true,
     });
+
+    try {
+      await expect(
+        loadRuntimeConfig(
+          {
+            LUNA_HOME: lunaHomeDir,
+            DISCORD_BOT_TOKEN: "token",
+          },
+          {
+            templatesDir,
+          },
+        ),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+      await rm(templatesDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("workspace のネスト先同名パスがファイル以外なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+    const workspaceDir = resolve(lunaHomeDir, "workspace");
+    const templatesDir = await createTempTemplatesDir({
+      "nested/LUNA.md": "LUNA template",
+    });
+    await mkdir(workspaceDir, {
+      recursive: true,
+    });
+    await writeFile(resolve(workspaceDir, "nested"), "conflict");
 
     try {
       await expect(
@@ -756,7 +918,11 @@ async function createTempTemplatesDir(files: Record<string, string>): Promise<st
   });
   await Promise.all(
     Object.entries(files).map(async ([fileName, content]) => {
-      await writeFile(resolve(templatesDir, fileName), content);
+      const filePath = resolve(templatesDir, fileName);
+      await mkdir(dirname(filePath), {
+        recursive: true,
+      });
+      await writeFile(filePath, content);
     }),
   );
 
