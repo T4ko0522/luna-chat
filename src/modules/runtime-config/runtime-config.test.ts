@@ -7,6 +7,9 @@ import { describe, expect, it } from "vitest";
 
 import { loadRuntimeConfig, RuntimeConfigError } from "./runtime-config";
 
+const DEFAULT_AI_MODEL = "gpt-5.3-codex";
+const DEFAULT_AI_REASONING_EFFORT = "medium";
+
 describe("loadRuntimeConfig", () => {
   it("必須設定のみ読み込む", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
@@ -24,6 +27,8 @@ describe("loadRuntimeConfig", () => {
 
     expect(config.discordBotToken).toBe("token");
     expect(Array.from(config.allowedChannelIds)).toEqual(["111", "222", "333"]);
+    expect(config.aiModel).toBe(DEFAULT_AI_MODEL);
+    expect(config.aiReasoningEffort).toBe(DEFAULT_AI_REASONING_EFFORT);
     expect(config.lunaHomeDir).toBe(resolve(lunaHomeDir));
     expect(config.codexWorkspaceDir).toBe(resolve(lunaHomeDir, "workspace"));
     expect(config.codexHomeDir).toBe(resolve(lunaHomeDir, "codex"));
@@ -80,6 +85,35 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
+  it("AIモデルと推論設定を config.toml から読み込む", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+        ai: {
+          model: "gpt-5.3",
+          reasoningEffort: "high",
+        },
+      }),
+    );
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(config.aiModel).toBe("gpt-5.3");
+      expect(config.aiReasoningEffort).toBe("high");
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がなければ自動生成し空配列で起動する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
 
@@ -95,6 +129,10 @@ describe("loadRuntimeConfig", () => {
       expect(parseTOML(generatedConfigToml)).toEqual({
         discord: {
           allowed_channel_ids: [],
+        },
+        ai: {
+          model: DEFAULT_AI_MODEL,
+          reasoning_effort: DEFAULT_AI_REASONING_EFFORT,
         },
       });
     } finally {
@@ -387,6 +425,34 @@ allowed_channel_ids = "111,222"
     }
   });
 
+  it("config.toml の ai.reasoning_effort が不正値なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord]
+allowed_channel_ids = ["111"]
+
+[ai]
+model = "gpt-5.3-codex"
+reasoning_effort = "turbo"
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がファイル以外なら失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
     await mkdir(resolve(lunaHomeDir, "config.toml"), {
@@ -434,10 +500,24 @@ function createTempLunaHomeDir(): string {
   return resolve(join(tmpdir(), `luna-runtime-config-${Date.now()}-${Math.random().toString(16)}`));
 }
 
-function createConfigToml(input: { allowedChannelIds: string[] }): string {
+function createConfigToml(input: {
+  allowedChannelIds: string[];
+  ai?: {
+    model: string;
+    reasoningEffort: string;
+  };
+}): string {
   const channelIds = input.allowedChannelIds.map((channelId) => `"${channelId}"`).join(", ");
+  const ai = input.ai ?? {
+    model: DEFAULT_AI_MODEL,
+    reasoningEffort: DEFAULT_AI_REASONING_EFFORT,
+  };
   return `[discord]
 allowed_channel_ids = [${channelIds}]
+
+[ai]
+model = "${ai.model}"
+reasoning_effort = "${ai.reasoningEffort}"
 `;
 }
 

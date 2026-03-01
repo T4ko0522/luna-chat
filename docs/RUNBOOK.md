@@ -32,8 +32,9 @@
 2. `LUNA_HOME` 未設定時は `~/.luna` を使用することを確認する。
 3. `$LUNA_HOME/config.toml` が存在しない場合は初回起動で自動生成されることを確認する。
 4. `config.toml` の `[discord].allowed_channel_ids` が文字列配列であることを確認する（空配列は許容）。
-5. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
-6. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
+5. `config.toml` の `[ai].model` と `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）が必要に応じて設定されていることを確認する（未設定時は既定値を使用）。
+6. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
+7. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
 
 ### 3.2 開発時コマンド
 

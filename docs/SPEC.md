@@ -69,6 +69,8 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - 複数チャンネル ID を設定可能にする。
 - 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）で設定する。
 - 例: `allowed_channel_ids = ["1234567890", "2345678901"]`
+- AI モデルは `$LUNA_HOME/config.toml` の `[ai].model` で設定可能にする。
+- 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）で設定可能にする。
 
 ## 6. 受け入れ条件
 

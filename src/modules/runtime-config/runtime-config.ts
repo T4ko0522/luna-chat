@@ -14,16 +14,33 @@ import { resolve } from "node:path";
 import { parseTOML, stringifyTOML } from "confbox";
 import { z } from "zod";
 
+import type { ReasoningEffort } from "../ai/codex-generated/ReasoningEffort";
+
 const DEFAULT_LUNA_HOME = "~/.luna";
 const WORKSPACE_DIR_NAME = "workspace";
 const CODEX_HOME_DIR_NAME = "codex";
 const LOGS_DIR_NAME = "logs";
 const DEFAULT_TEMPLATES_DIR_NAME = "templates";
 const CONFIG_FILE_NAME = "config.toml";
+const DEFAULT_AI_MODEL = "gpt-5.3-codex";
+const DEFAULT_AI_REASONING_EFFORT: ReasoningEffort = "medium";
+
+const ReasoningEffortSchema = z.union([
+  z.literal("none"),
+  z.literal("minimal"),
+  z.literal("low"),
+  z.literal("medium"),
+  z.literal("high"),
+  z.literal("xhigh"),
+]);
 
 type RuntimeSettings = {
   discord: {
     allowed_channel_ids: string[];
+  };
+  ai: {
+    model: string;
+    reasoning_effort: ReasoningEffort;
   };
 };
 
@@ -31,17 +48,29 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   discord: {
     allowed_channel_ids: [],
   },
+  ai: {
+    model: DEFAULT_AI_MODEL,
+    reasoning_effort: DEFAULT_AI_REASONING_EFFORT,
+  },
 };
 
 const RuntimeSettingsSchema = z.looseObject({
   discord: z.looseObject({
     allowed_channel_ids: z.array(z.string()),
   }),
+  ai: z
+    .looseObject({
+      model: z.string().trim().min(1).default(DEFAULT_AI_MODEL),
+      reasoning_effort: ReasoningEffortSchema.default(DEFAULT_AI_REASONING_EFFORT),
+    })
+    .default(DEFAULT_RUNTIME_SETTINGS.ai),
 });
 
 export type RuntimeConfig = {
   discordBotToken: string;
   allowedChannelIds: ReadonlySet<string>;
+  aiModel: string;
+  aiReasoningEffort: ReasoningEffort;
   lunaHomeDir: string;
   codexHomeDir: string;
   codexWorkspaceDir: string;
@@ -79,14 +108,16 @@ export async function loadRuntimeConfig(
   await ensureDirectoryReady(logsDir, "logs directory must be a writable directory.");
   const configPath = await ensureConfigFileExists(lunaHomeDir);
   const config = await loadConfigToml(configPath);
-  const allowedChannelIds = parseAllowedChannelIdsFromConfig(config);
+  const runtimeSettings = parseRuntimeSettingsFromConfig(config);
   await seedWorkspaceTemplatesIfMissing(
     codexWorkspaceDir,
     resolveTemplatesDir(options.templatesDir),
   );
 
   return {
-    allowedChannelIds,
+    allowedChannelIds: runtimeSettings.allowedChannelIds,
+    aiModel: runtimeSettings.aiModel,
+    aiReasoningEffort: runtimeSettings.aiReasoningEffort,
     lunaHomeDir,
     codexHomeDir,
     codexWorkspaceDir,
@@ -95,11 +126,15 @@ export async function loadRuntimeConfig(
   };
 }
 
-function parseAllowedChannelIdsFromConfig(rawConfig: unknown): ReadonlySet<string> {
+function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
+  allowedChannelIds: ReadonlySet<string>;
+  aiModel: string;
+  aiReasoningEffort: ReasoningEffort;
+} {
   const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
   if (!parseResult.success) {
     throw new RuntimeConfigError(
-      "config.toml must define [discord].allowed_channel_ids as an array of strings.",
+      "config.toml must define [discord].allowed_channel_ids as an array of strings and optional [ai].model/[ai].reasoning_effort.",
     );
   }
 
@@ -107,7 +142,11 @@ function parseAllowedChannelIdsFromConfig(rawConfig: unknown): ReadonlySet<strin
     .map((channelId) => channelId.trim())
     .filter((channelId) => channelId.length > 0);
 
-  return new Set(allowedChannelIds);
+  return {
+    allowedChannelIds: new Set(allowedChannelIds),
+    aiModel: parseResult.data.ai.model,
+    aiReasoningEffort: parseResult.data.ai.reasoning_effort,
+  };
 }
 
 async function ensureConfigFileExists(lunaHomeDir: string): Promise<string> {

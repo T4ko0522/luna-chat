@@ -4,7 +4,6 @@ import { Client, GatewayIntentBits } from "discord.js";
 
 import { CodexAiRuntime } from "./modules/ai/adapters/outbound/codex/codex-ai-runtime";
 import { ChannelSessionCoordinator } from "./modules/ai/application/channel-session-coordinator";
-import type { ReasoningEffort } from "./modules/ai/codex-generated/ReasoningEffort";
 import {
   WorkspaceDiscordAttachmentStore,
   type DiscordAttachmentStore,
@@ -26,12 +25,10 @@ import { createTypingLifecycleRegistry } from "./modules/typing/typing-lifecycle
 import { closeFileLogging, initializeFileLogging, logger } from "./shared/logger";
 
 const CODEX_APP_SERVER_COMMAND = ["codex", "app-server", "--listen", "stdio://"] as const;
-const CODEX_APP_SERVER_MODEL = "gpt-5.3-codex";
 const CODEX_APP_SERVER_APPROVAL_POLICY = "never";
 const CODEX_APP_SERVER_SANDBOX = "workspace-write";
 const CODEX_APP_SERVER_TIMEOUT_MS_FOR_DISCORD = 10 * 60_000;
 const CODEX_APP_SERVER_TIMEOUT_MS_FOR_HEARTBEAT = 30 * 60_000;
-const CODEX_APP_SERVER_REASONING_EFFORT: ReasoningEffort = "medium";
 const HEARTBEAT_PROMPT =
   "`HEARTBEAT.md`がワークスペース内に存在する場合はそれを確認し、内容に従って作業を行ってください。過去のチャットで言及された古いタスクを推測したり繰り返してはいけません。特に対応すべき事項がない場合は、そのまま終了してください。";
 
@@ -60,7 +57,7 @@ const createRuntime = (timeoutMs: number) => {
     codexHomeDir: runtimeConfig.codexHomeDir,
     command: CODEX_APP_SERVER_COMMAND,
     cwd: runtimeConfig.codexWorkspaceDir,
-    model: CODEX_APP_SERVER_MODEL,
+    model: runtimeConfig.aiModel,
     sandbox: CODEX_APP_SERVER_SANDBOX,
     timeoutMs,
   });
@@ -72,14 +69,14 @@ const discordAiService: ReplyGenerator = new ChannelSessionCoordinator({
   onDiscordTurnCompleted: (channelId) => {
     typingLifecycleRegistry.stopByChannelId(channelId);
   },
-  reasoningEffort: CODEX_APP_SERVER_REASONING_EFFORT,
+  reasoningEffort: runtimeConfig.aiReasoningEffort,
   workspaceDir: runtimeConfig.codexWorkspaceDir,
 });
 
 const heartbeatAiService = new ChannelSessionCoordinator({
   createRuntime: () => createRuntime(CODEX_APP_SERVER_TIMEOUT_MS_FOR_HEARTBEAT),
   discordMcpServerUrl: discordMcpServer.url,
-  reasoningEffort: CODEX_APP_SERVER_REASONING_EFFORT,
+  reasoningEffort: runtimeConfig.aiReasoningEffort,
   workspaceDir: runtimeConfig.codexWorkspaceDir,
 });
 

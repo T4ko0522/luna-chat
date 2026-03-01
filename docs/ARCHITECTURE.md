@@ -34,7 +34,8 @@
 - `src/modules/runtime-config/runtime-config.ts`
   - 設定値検証（環境変数: `DISCORD_BOT_TOKEN` / `LUNA_HOME`、設定ファイル: `$LUNA_HOME/config.toml`）
   - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）読み込み（`confbox`）
-  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`）
+  - `config.toml` の `[ai].model` / `[ai].reasoning_effort` 読み込み（`confbox`）
+  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
   - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
 - `src/shared/logger.ts`
@@ -182,6 +183,8 @@
 - `$LUNA_HOME/config.toml`: 起動時に自動生成（未存在時）
   - `[discord].allowed_channel_ids`: 文字列配列（例: `["123","456"]`）
   - 空配列でも起動継続（Bot は許可チャンネルなし状態で待機）
+  - `[ai].model`: 文字列（未指定時 `gpt-5.3-codex`）
+  - `[ai].reasoning_effort`: `none|minimal|low|medium|high|xhigh`（未指定時 `medium`）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
 - 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
 

@@ -41,7 +41,9 @@
 - AI 呼び出し失敗時はフォールバック返信せず、ログ記録のみで終了する。
 - 設定は `DISCORD_BOT_TOKEN` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
 - 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）から読み込む。
-- `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []` で起動継続する。
+- AI モデル設定は `$LUNA_HOME/config.toml` の `[ai].model` から読み込む。
+- AI 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort` から読み込む。
+- `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"` で起動継続する。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
 - 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。
