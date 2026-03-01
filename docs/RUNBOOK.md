@@ -7,10 +7,10 @@
 
 ## 2. 不変ルール
 
-1. 返信対象は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` に含まれるチャンネルのみ。
+1. 返信対象は Guild では `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`、DM では `[discord].allow_dm` に従う。
 2. 指定チャンネル内の投稿（メンション有無を問わない）を AI 処理対象とする。
 3. `mentionedBot` は AI 入力へ含めるが、ハンドラで優先制御しない。
-4. スレッドと DM は現時点で非対応。
+4. スレッドは常に非対応。DM は `[discord].allow_dm` で有効/無効を切り替える。
 5. 会話ログ本文は永続保存しない。
 6. AI 入力には現在メッセージに加えて直近 10 件を含める。
 7. 追加履歴は `read_message_history` で都度取得できる。
@@ -32,9 +32,10 @@
 2. `LUNA_HOME` 未設定時は `~/.luna` を使用することを確認する。
 3. `$LUNA_HOME/config.toml` が存在しない場合は初回起動で自動生成されることを確認する。
 4. `config.toml` の `[discord].allowed_channel_ids` が文字列配列であることを確認する（空配列は許容）。
-5. `config.toml` の `[ai].model` と `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）が必要に応じて設定されていることを確認する（未設定時は既定値を使用）。
-6. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
-7. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
+5. `config.toml` の `[discord].allow_dm`（boolean）を必要に応じて設定する（未設定時は `false`）。
+6. `config.toml` の `[ai].model` と `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）が必要に応じて設定されていることを確認する（未設定時は既定値を使用）。
+7. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
+8. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
 
 ### 3.2 開発時コマンド
 
@@ -46,7 +47,7 @@
 
 ### 3.3 運用時の基本挙動
 
-1. 受信イベントでチャンネル判定（DM/スレッド/許可外除外）を実施する。
+1. 受信イベントでチャンネル判定（スレッド除外、DMは`allow_dm`で判定、Guildは許可外除外）を実施する。
 2. 現在メッセージと直近 10 件を AI に渡す。
 3. AI は必要時に `read_message_history` / `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を使用する。`send_message` は任意の `replyToMessageId` 指定時に返信投稿として送信する。
 4. AI エラー時は返信せず終了し、失敗ログを確認する。

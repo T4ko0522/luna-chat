@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --enable-source-maps
 
-import { Client, GatewayIntentBits } from "discord.js";
+import { Client, GatewayIntentBits, Partials } from "discord.js";
 
 import { CodexAiRuntime } from "./modules/ai/adapters/outbound/codex/codex-ai-runtime";
 import { ChannelSessionCoordinator } from "./modules/ai/application/channel-session-coordinator";
@@ -36,8 +36,10 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Channel],
 });
 
 const runtimeConfig = await loadConfigOrExit();
@@ -107,6 +109,7 @@ client.on("messageCreate", async (message) => {
     attachmentStore,
     aiService: discordAiService,
     allowedChannelIds: runtimeConfig.allowedChannelIds,
+    allowDm: runtimeConfig.allowDm,
     botUserId,
     logger,
     message,

@@ -27,6 +27,7 @@ describe("loadRuntimeConfig", () => {
 
     expect(config.discordBotToken).toBe("token");
     expect(Array.from(config.allowedChannelIds)).toEqual(["111", "222", "333"]);
+    expect(config.allowDm).toBe(false);
     expect(config.aiModel).toBe(DEFAULT_AI_MODEL);
     expect(config.aiReasoningEffort).toBe(DEFAULT_AI_REASONING_EFFORT);
     expect(config.lunaHomeDir).toBe(resolve(lunaHomeDir));
@@ -114,6 +115,31 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
+  it("config.toml の allow_dm を読み込む", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowDm: true,
+        allowedChannelIds: ["111"],
+      }),
+    );
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(config.allowDm).toBe(true);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がなければ自動生成し空配列で起動する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
 
@@ -128,6 +154,7 @@ describe("loadRuntimeConfig", () => {
       const generatedConfigToml = await readFile(resolve(lunaHomeDir, "config.toml"), "utf8");
       expect(parseTOML(generatedConfigToml)).toEqual({
         discord: {
+          allow_dm: false,
           allowed_channel_ids: [],
         },
         ai: {
@@ -453,6 +480,35 @@ reasoning_effort = "turbo"
     }
   });
 
+  it("config.toml の allow_dm が boolean でなければ失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord]
+allowed_channel_ids = ["111"]
+allow_dm = "true"
+
+[ai]
+model = "gpt-5.3-codex"
+reasoning_effort = "medium"
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がファイル以外なら失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
     await mkdir(resolve(lunaHomeDir, "config.toml"), {
@@ -502,18 +558,21 @@ function createTempLunaHomeDir(): string {
 
 function createConfigToml(input: {
   allowedChannelIds: string[];
+  allowDm?: boolean;
   ai?: {
     model: string;
     reasoningEffort: string;
   };
 }): string {
   const channelIds = input.allowedChannelIds.map((channelId) => `"${channelId}"`).join(", ");
+  const allowDm = input.allowDm ?? false;
   const ai = input.ai ?? {
     model: DEFAULT_AI_MODEL,
     reasoningEffort: DEFAULT_AI_REASONING_EFFORT,
   };
   return `[discord]
 allowed_channel_ids = [${channelIds}]
+allow_dm = ${allowDm}
 
 [ai]
 model = "${ai.model}"

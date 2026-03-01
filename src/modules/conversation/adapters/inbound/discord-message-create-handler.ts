@@ -109,6 +109,7 @@ type HandleMessageInput = {
   message: MessageLike;
   botUserId: string;
   allowedChannelIds: ReadonlySet<string>;
+  allowDm: boolean;
   aiService: ReplyGenerator;
   logger: LoggerLike;
   typingLifecycleRegistry?: ReturnType<typeof createTypingLifecycleRegistry>;
@@ -116,6 +117,7 @@ type HandleMessageInput = {
 
 type ReplyPolicyInput = {
   allowedChannelIds: ReadonlySet<string>;
+  allowDm: boolean;
   channelId: string;
   isThread: boolean;
   isDm: boolean;
@@ -133,6 +135,7 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
 
   const policyDecision = evaluateReplyPolicy({
     allowedChannelIds: input.allowedChannelIds,
+    allowDm: input.allowDm,
     channelId: message.channelId,
     isDm: !message.inGuild(),
     isThread: message.channel.isThread(),
@@ -189,8 +192,12 @@ function toSendTyping(
 }
 
 function evaluateReplyPolicy(input: ReplyPolicyInput): { shouldHandle: boolean } {
-  if (input.isDm || input.isThread) {
+  if (input.isThread) {
     return { shouldHandle: false };
+  }
+
+  if (input.isDm) {
+    return { shouldHandle: input.allowDm };
   }
 
   if (!input.allowedChannelIds.has(input.channelId)) {

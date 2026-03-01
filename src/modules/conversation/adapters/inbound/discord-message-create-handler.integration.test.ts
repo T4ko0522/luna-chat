@@ -75,6 +75,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -98,6 +99,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -145,6 +147,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -205,6 +208,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -212,6 +216,27 @@ describe("handleMessageCreate integration", () => {
 
     expect(generateReply).not.toHaveBeenCalled();
     expect(sendTyping).not.toHaveBeenCalled();
+  });
+
+  it("DM 応答を有効化した場合は AI が呼び出される", async () => {
+    const message = createMessage({
+      inGuild: false,
+    });
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
+    const aiService = createAiService(generateReply);
+    const attachmentStore = createAttachmentStore();
+
+    await handleMessageCreate({
+      attachmentStore,
+      aiService,
+      allowedChannelIds: new Set(["allowed"]),
+      allowDm: true,
+      botUserId: "bot",
+      logger: createLogger(),
+      message,
+    });
+
+    expect(generateReply).toHaveBeenCalledTimes(1);
   });
 
   it("スレッド投稿は無反応", async () => {
@@ -228,6 +253,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -255,6 +281,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger,
       message,
@@ -284,6 +311,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -330,6 +358,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -371,6 +400,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger,
       message,
@@ -403,6 +433,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -430,6 +461,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger,
       message,
@@ -463,6 +495,7 @@ describe("handleMessageCreate integration", () => {
         attachmentStore,
         aiService,
         allowedChannelIds: new Set(["allowed"]),
+        allowDm: false,
         botUserId: "bot",
         logger: createLogger(),
         message,
@@ -495,6 +528,7 @@ describe("handleMessageCreate integration", () => {
         attachmentStore,
         aiService,
         allowedChannelIds: new Set(["allowed"]),
+        allowDm: false,
         botUserId: "bot",
         logger: createLogger(),
         message,
@@ -522,6 +556,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger,
       message,
@@ -559,6 +594,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -594,6 +630,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger,
       message,
@@ -643,6 +680,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -688,6 +726,7 @@ describe("handleMessageCreate integration", () => {
       attachmentStore,
       aiService,
       allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
       botUserId: "bot",
       logger: createLogger(),
       message,

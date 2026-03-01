@@ -33,9 +33,9 @@
 
 - `src/modules/runtime-config/runtime-config.ts`
   - 設定値検証（環境変数: `DISCORD_BOT_TOKEN` / `LUNA_HOME`、設定ファイル: `$LUNA_HOME/config.toml`）
-  - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）読み込み（`confbox`）
+  - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）/ `[discord].allow_dm`（boolean）読み込み（`confbox`）
   - `config.toml` の `[ai].model` / `[ai].reasoning_effort` 読み込み（`confbox`）
-  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`）
+  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
   - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
 - `src/shared/logger.ts`
@@ -49,7 +49,7 @@
 
 - `src/modules/conversation/adapters/inbound/discord-message-create-handler.ts`
   - `messageCreate` ハンドリング
-  - 返信判定（非DM・非スレッド・許可チャンネル）
+  - 返信判定（非スレッド・DMは`allow_dm`に従う・Guildは許可チャンネル）
   - `RuntimeMessage` 整形（返信先・添付マーカー・リアクション含む）
   - 初期履歴10件取得と AI 呼び出し
 - `src/modules/conversation/domain/runtime-message.ts`
@@ -149,7 +149,7 @@
 
 1. Discord `messageCreate` を受信する。
 2. 自分自身の投稿を除外する。
-3. 返信判定（DM/スレッド/許可外チャンネルを除外）を行う。
+3. 返信判定（スレッド除外、DMは`allow_dm`で判定、Guildは許可外チャンネルを除外）を行う。
 4. 現在メッセージを `RuntimeMessage` に変換する（添付・返信先・リアクション含む）。
 5. `mentionedBot=true` の場合のみ typing を開始する（source=`message:<id>`）。
 6. 直近履歴10件を取得し、昇順整形して AI へ渡す。
@@ -182,6 +182,7 @@
 - `LUNA_HOME`: 任意（未設定時 `~/.luna`）
 - `$LUNA_HOME/config.toml`: 起動時に自動生成（未存在時）
   - `[discord].allowed_channel_ids`: 文字列配列（例: `["123","456"]`）
+  - `[discord].allow_dm`: boolean（`false` ならDM無効、`true` ならDM有効。未指定時 `false`）
   - 空配列でも起動継続（Bot は許可チャンネルなし状態で待機）
   - `[ai].model`: 文字列（未指定時 `gpt-5.3-codex`）
   - `[ai].reasoning_effort`: `none|minimal|low|medium|high|xhigh`（未指定時 `medium`）

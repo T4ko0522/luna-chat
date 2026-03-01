@@ -37,6 +37,7 @@ const ReasoningEffortSchema = z.union([
 type RuntimeSettings = {
   discord: {
     allowed_channel_ids: string[];
+    allow_dm: boolean;
   };
   ai: {
     model: string;
@@ -47,6 +48,7 @@ type RuntimeSettings = {
 const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   discord: {
     allowed_channel_ids: [],
+    allow_dm: false,
   },
   ai: {
     model: DEFAULT_AI_MODEL,
@@ -57,6 +59,7 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
 const RuntimeSettingsSchema = z.looseObject({
   discord: z.looseObject({
     allowed_channel_ids: z.array(z.string()),
+    allow_dm: z.boolean().default(DEFAULT_RUNTIME_SETTINGS.discord.allow_dm),
   }),
   ai: z
     .looseObject({
@@ -69,6 +72,7 @@ const RuntimeSettingsSchema = z.looseObject({
 export type RuntimeConfig = {
   discordBotToken: string;
   allowedChannelIds: ReadonlySet<string>;
+  allowDm: boolean;
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
   lunaHomeDir: string;
@@ -116,6 +120,7 @@ export async function loadRuntimeConfig(
 
   return {
     allowedChannelIds: runtimeSettings.allowedChannelIds,
+    allowDm: runtimeSettings.allowDm,
     aiModel: runtimeSettings.aiModel,
     aiReasoningEffort: runtimeSettings.aiReasoningEffort,
     lunaHomeDir,
@@ -128,13 +133,14 @@ export async function loadRuntimeConfig(
 
 function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
   allowedChannelIds: ReadonlySet<string>;
+  allowDm: boolean;
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
 } {
   const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
   if (!parseResult.success) {
     throw new RuntimeConfigError(
-      "config.toml must define [discord].allowed_channel_ids as an array of strings and optional [ai].model/[ai].reasoning_effort.",
+      "config.toml must define [discord].allowed_channel_ids as an array of strings, optional [discord].allow_dm as a boolean, and optional [ai].model/[ai].reasoning_effort.",
     );
   }
 
@@ -144,6 +150,7 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
 
   return {
     allowedChannelIds: new Set(allowedChannelIds),
+    allowDm: parseResult.data.discord.allow_dm,
     aiModel: parseResult.data.ai.model,
     aiReasoningEffort: parseResult.data.ai.reasoning_effort,
   };

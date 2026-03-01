@@ -7,9 +7,9 @@
 
 ## 2. 現在の真実（Project Truth）
 
-- 返信判定は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` + 非DM + 非スレッドのみで行う。
+- 返信判定は `$LUNA_HOME/config.toml` の `[discord].allow_dm` + `[discord].allowed_channel_ids` + 非スレッドで行う（DMは `allow_dm` が `true` のときのみ処理）。
 - メンション有無は `mentionedBot` として保持するが、返信優先制御には使っていない。
-- Bot投稿は無視し、許可チャンネル投稿を AI へ渡す。
+- Bot投稿は無視し、Guildでは許可チャンネル投稿、DMでは `allow_dm=true` の投稿を AI へ渡す。
 - AI 入力には現在メッセージに加えて、同一チャンネルの直近 10 件履歴を初期投入する。
 - AI 入力メッセージには、リアクションが存在する場合のみ絵文字別 `reactions` を含める（`selfReacted` はBot自身が該当絵文字でリアクション済みのときのみ付与）。
 - 追加履歴は MCP tool `read_message_history` で取得できる（1〜100件、未指定30件）。
@@ -41,9 +41,10 @@
 - AI 呼び出し失敗時はフォールバック返信せず、ログ記録のみで終了する。
 - 設定は `DISCORD_BOT_TOKEN` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
 - 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）から読み込む。
+- DM 応答可否は `$LUNA_HOME/config.toml` の `[discord].allow_dm`（boolean）から読み込む。
 - AI モデル設定は `$LUNA_HOME/config.toml` の `[ai].model` から読み込む。
 - AI 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort` から読み込む。
-- `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"` で起動継続する。
+- `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"` で起動継続する。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
 - 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。

@@ -18,6 +18,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 
 - 指定されたチャンネルでのみ動作する。
 - 指定チャンネル内の投稿（メンション有無を問わない）を AI 処理対象とする。
+- DM 投稿の処理有無は `$LUNA_HOME/config.toml` の `[discord].allow_dm` で切り替える（`false` で無効、`true` で有効）。
 - `mentionedBot` 情報は AI 入力に含めるが、メンション優先制御はコード上で実装していない。
 - すべての投稿へ返信する必要はない。
 - Discord 投稿起点に加えて heartbeat 起点でも AI を実行する。
@@ -69,6 +70,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - 複数チャンネル ID を設定可能にする。
 - 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）で設定する。
 - 例: `allowed_channel_ids = ["1234567890", "2345678901"]`
+- DM 応答可否は `$LUNA_HOME/config.toml` の `[discord].allow_dm`（boolean）で設定する。
 - AI モデルは `$LUNA_HOME/config.toml` の `[ai].model` で設定可能にする。
 - 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）で設定可能にする。
 
@@ -84,3 +86,4 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 8. `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を tool use で実行でき、`send_message` は任意で返信先IDを指定できる。
 9. heartbeat は毎時 00 分 / 30 分（JST）に実行される。
 10. heartbeat 実行時は実装済みの固定プロンプトが渡される。
+11. `allow_dm = false` では DM を処理せず、`allow_dm = true` では DM 投稿を AI へ渡せる。

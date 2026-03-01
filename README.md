@@ -29,11 +29,13 @@ LUNA_HOME=~/.luna
 `LUNA_HOME` は起動時に自動作成され、`$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` も自動で準備されます。  
 さらに `$LUNA_HOME/config.toml` が存在しない場合は起動時に自動生成されます。  
 許可チャンネルは `config.toml` の `[discord].allowed_channel_ids` で設定します。
+DM 応答可否は `[discord].allow_dm` で設定します。
 AI モデルと推論設定は `[ai].model` / `[ai].reasoning_effort` で設定します。
 
 ```toml
 [discord]
 allowed_channel_ids = ["123456789012345678", "234567890123456789"]
+allow_dm = false
 
 [ai]
 model = "gpt-5.3-codex"
@@ -41,6 +43,7 @@ reasoning_effort = "medium"
 ```
 
 `allowed_channel_ids = []`（空配列）でも起動は継続し、その場合 Bot はどのチャンネルにも反応しません。  
+`allow_dm = false` では DM に無反応、`allow_dm = true` では DM 投稿も AI 処理対象になります。  
 `[ai]` を省略した場合は `model="gpt-5.3-codex"` / `reasoning_effort="medium"` が使われます。  
 さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。
 
