@@ -45,18 +45,23 @@
 - AI モデル設定は `$LUNA_HOME/config.toml` の `[ai].model` から読み込む。
 - AI 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort` から読み込む。
 - heartbeat 実行スケジュールは `$LUNA_HOME/config.toml` の `[heartbeat].cron_time` から読み込む。
-- heartbeat タイムゾーンは `$LUNA_HOME/config.toml` の `[heartbeat].time_zone` から読み込む（未設定時はシステムタイムゾーン）。
+- heartbeat と cron prompt のタイムゾーンは `$LUNA_HOME/config.toml` のトップレベル `time_zone` から読み込む（未設定時はシステムタイムゾーン）。
 - `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`, `heartbeat.cron_time = "0 0,30 * * * *"` で起動継続する。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
 - 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
+- 起動時に `templates/cron.toml` が `workspace/cron.toml` へ不足分のみ補完される（既存は上書きしない）。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。
 - `thread/start` は `ephemeral=true` / `personality="friendly"` を使用し、Discord MCP URLを `config.mcp_servers.discord.url` へ注入する。
 - server-initiated request のうち、approval 系は `decline` 応答、`requestUserInput` は辞退選択肢を返す。
 - Discord MCP サーバーは `http://127.0.0.1:<port>/mcp` で起動し、`read_message_history` / `send_message`（任意 `replyToMessageId` 対応） / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を提供する。
 - heartbeat は `cron` で `[heartbeat].cron_time`（未設定時 `0 0,30 * * * *`）に従って実行し、`waitForCompletion=true` で重複実行を抑止する。
-- `[heartbeat].time_zone` 未設定時はシステムタイムゾーンで実行する。
+- `time_zone` 未設定時は heartbeat / cron prompt ともにシステムタイムゾーンで実行する。
 - heartbeat プロンプトは以下の固定文を使用する。  
   `HEARTBEAT.md`がワークスペース内に存在する場合はそれを確認し、内容に従って作業を行ってください。過去のチャットで言及された古いタスクを推測したり繰り返してはいけません。特に対応すべき事項がない場合は、そのまま終了してください。
+- cron prompt は `workspace/cron.toml` の `[jobs.<id>]` から `cron` / `prompt` / `oneshot` を読み込み実行する。
+- `cron.toml` は `chokidar` で監視し、変更時に再起動なしで再読込する。
+- `cron.toml` の再読込に失敗した場合は直前の有効スケジュールを維持する。
+- `oneshot = true` の cron prompt は1回試行後に `cron.toml` から削除する（成功/失敗問わず）。
 - プロンプトは `instructions` / `developerRolePrompt` / `userRolePrompt` に分割し、`instructions` にはワークスペースの `LUNA.md` / `SOUL.md` を連結する。
 - `oxlint` では `application`/`ports`/`domain` からの不適切な層依存（adapters/application 直接参照など）を `no-restricted-imports` で検出する。
 - 自己改善ドキュメントの自動更新フローは未実装。
@@ -69,9 +74,10 @@
 3. 会話ログ本文は永続保存しない。
 4. 初期文脈は直近 10 件、追加文脈は tool use で取得する。
 5. heartbeat を定期実行する。
-6. 本体コードと `$LUNA_HOME/workspace` を分離する。
-7. `STATUS.md` は作業ごとに AI が更新する。
-8. `templates` 直下の通常ファイルは起動時に `workspace` へ不足分のみ補完する。
+6. cron prompt を `workspace/cron.toml` で定期実行する。
+7. 本体コードと `$LUNA_HOME/workspace` を分離する。
+8. `STATUS.md` は作業ごとに AI が更新する。
+9. `templates` 直下の通常ファイルは起動時に `workspace` へ不足分のみ補完する。
 
 ## 4. 直近タスク
 

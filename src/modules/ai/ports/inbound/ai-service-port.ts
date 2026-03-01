@@ -8,6 +8,7 @@ export type AiInput = {
 
 export type HeartbeatInput = {
   prompt: string;
+  source?: "heartbeat" | "cron";
 };
 
 export interface AiService {

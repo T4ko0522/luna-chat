@@ -24,6 +24,9 @@ type TurnLogContext =
     }
   | {
       source: "heartbeat";
+    }
+  | {
+      source: "cron";
     };
 
 type ActiveChannelSession = {
@@ -55,7 +58,7 @@ export class ChannelSessionCoordinator implements AiService {
     let threadId: string | undefined;
     let turnId: string | undefined;
     const context: TurnLogContext = {
-      source: "heartbeat",
+      source: input.source ?? "heartbeat",
     };
 
     try {
@@ -344,13 +347,16 @@ function toTurnLogContextFields(context: TurnLogContext):
       source: "heartbeat";
     }
   | {
+      source: "cron";
+    }
+  | {
       source: "discord";
       channelId: string;
       messageId: string;
     } {
-  if (context.source === "heartbeat") {
+  if (context.source === "heartbeat" || context.source === "cron") {
     return {
-      source: "heartbeat",
+      source: context.source,
     };
   }
 

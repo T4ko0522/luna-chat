@@ -37,6 +37,7 @@ const ReasoningEffortSchema = z.union([
 ]);
 
 type RuntimeSettings = {
+  time_zone?: string;
   discord: {
     allowed_channel_ids: string[];
     allow_dm: boolean;
@@ -47,7 +48,6 @@ type RuntimeSettings = {
   };
   heartbeat: {
     cron_time: string;
-    time_zone?: string;
   };
 };
 
@@ -66,6 +66,7 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
 };
 
 const RuntimeSettingsSchema = z.looseObject({
+  time_zone: z.string().trim().min(1).optional(),
   discord: z.looseObject({
     allowed_channel_ids: z.array(z.string()),
     allow_dm: z.boolean().default(DEFAULT_RUNTIME_SETTINGS.discord.allow_dm),
@@ -79,7 +80,6 @@ const RuntimeSettingsSchema = z.looseObject({
   heartbeat: z
     .looseObject({
       cron_time: z.string().trim().min(1).default(DEFAULT_HEARTBEAT_CRON_TIME),
-      time_zone: z.string().trim().min(1).optional(),
     })
     .default(DEFAULT_RUNTIME_SETTINGS.heartbeat),
 });
@@ -91,7 +91,7 @@ export type RuntimeConfig = {
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
   heartbeatCronTime: string;
-  heartbeatTimeZone: string | undefined;
+  timeZone: string | undefined;
   lunaHomeDir: string;
   codexHomeDir: string;
   codexWorkspaceDir: string;
@@ -141,7 +141,7 @@ export async function loadRuntimeConfig(
     aiModel: runtimeSettings.aiModel,
     aiReasoningEffort: runtimeSettings.aiReasoningEffort,
     heartbeatCronTime: runtimeSettings.heartbeatCronTime,
-    heartbeatTimeZone: runtimeSettings.heartbeatTimeZone,
+    timeZone: runtimeSettings.timeZone,
     lunaHomeDir,
     codexHomeDir,
     codexWorkspaceDir,
@@ -156,12 +156,17 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
   heartbeatCronTime: string;
-  heartbeatTimeZone: string | undefined;
+  timeZone: string | undefined;
 } {
   const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
   if (!parseResult.success) {
     throw new RuntimeConfigError(
-      "config.toml must define [discord].allowed_channel_ids as an array of strings, optional [discord].allow_dm as a boolean, optional [ai].model/[ai].reasoning_effort, and optional [heartbeat].cron_time/[heartbeat].time_zone.",
+      "config.toml must define [discord].allowed_channel_ids as an array of strings, optional [discord].allow_dm as a boolean, optional [ai].model/[ai].reasoning_effort, optional [heartbeat].cron_time, and optional top-level time_zone.",
+    );
+  }
+  if (hasDeprecatedHeartbeatTimeZone(rawConfig)) {
+    throw new RuntimeConfigError(
+      "config.toml no longer supports [heartbeat].time_zone. Use top-level time_zone instead.",
     );
   }
 
@@ -169,8 +174,8 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
     .map((channelId) => channelId.trim())
     .filter((channelId) => channelId.length > 0);
   const heartbeatCronTime = parseResult.data.heartbeat.cron_time;
-  const heartbeatTimeZone = parseResult.data.heartbeat.time_zone;
-  validateHeartbeatSchedule(heartbeatCronTime, heartbeatTimeZone);
+  const timeZone = parseResult.data.time_zone;
+  validateHeartbeatSchedule(heartbeatCronTime, timeZone);
 
   return {
     allowedChannelIds: new Set(allowedChannelIds),
@@ -178,7 +183,7 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
     aiModel: parseResult.data.ai.model,
     aiReasoningEffort: parseResult.data.ai.reasoning_effort,
     heartbeatCronTime,
-    heartbeatTimeZone,
+    timeZone,
   };
 }
 
@@ -187,9 +192,25 @@ function validateHeartbeatSchedule(cronTime: string, timeZone: string | undefine
     new CronTime(cronTime, timeZone);
   } catch {
     throw new RuntimeConfigError(
-      "config.toml has invalid [heartbeat] settings: [heartbeat].cron_time must be a valid cron expression and [heartbeat].time_zone must be a valid IANA time zone when specified.",
+      "config.toml has invalid schedule settings: [heartbeat].cron_time must be a valid cron expression and top-level time_zone must be a valid IANA time zone when specified.",
     );
   }
+}
+
+function hasDeprecatedHeartbeatTimeZone(rawConfig: unknown): boolean {
+  if (!isRecord(rawConfig)) {
+    return false;
+  }
+  const heartbeat = rawConfig["heartbeat"];
+  if (!isRecord(heartbeat)) {
+    return false;
+  }
+
+  return Object.hasOwn(heartbeat, "time_zone");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function ensureConfigFileExists(lunaHomeDir: string): Promise<string> {

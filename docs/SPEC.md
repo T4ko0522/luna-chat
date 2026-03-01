@@ -23,9 +23,12 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - すべての投稿へ返信する必要はない。
 - Discord 投稿起点に加えて heartbeat 起点でも AI を実行する。
 - heartbeat は `$LUNA_HOME/config.toml` の `[heartbeat].cron_time` に従って自動実行する（未設定時は毎時 00 分 / 30 分）。
-- heartbeat のタイムゾーンは `[heartbeat].time_zone` で任意指定できる（未設定時はシステムのタイムゾーンを使用）。
+- heartbeat と cron prompt のタイムゾーンは `$LUNA_HOME/config.toml` のトップレベル `time_zone` で任意指定できる（未設定時はシステムのタイムゾーンを使用）。
 - heartbeat 実行時のプロンプトは以下の固定文を使う。  
   `HEARTBEAT.md`がワークスペース内に存在する場合はそれを確認し、内容に従って作業を行ってください。過去のチャットで言及された古いタスクを推測したり繰り返してはいけません。特に対応すべき事項がない場合は、そのまま終了してください。
+- `$LUNA_HOME/workspace/cron.toml` の `[jobs.<id>]`（`cron` / `prompt` / `oneshot`）に従って任意プロンプトを定期実行する。
+- `cron.toml` の変更は監視し、再起動なしで反映する。
+- `oneshot = true` の cron prompt は1回試行後（成功/失敗を問わず）`cron.toml` から削除する。
 - AI は必要に応じて tool use（`send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail`）を使う。
 - `send_message` は任意の `replyToMessageId` を受け取り、指定時は該当メッセージへの返信として投稿する。
 - `start_typing` で開始した入力中表示は Discord turn 完了時に自動停止する。
@@ -75,7 +78,8 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - AI モデルは `$LUNA_HOME/config.toml` の `[ai].model` で設定可能にする。
 - 推論設定は `$LUNA_HOME/config.toml` の `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）で設定可能にする。
 - heartbeat 実行タイミングは `$LUNA_HOME/config.toml` の `[heartbeat].cron_time` で設定可能にする（未設定時 `0 0,30 * * * *`）。
-- heartbeat タイムゾーンは `$LUNA_HOME/config.toml` の `[heartbeat].time_zone` で設定可能にする（未設定時はシステムタイムゾーン）。
+- heartbeat と cron prompt の共通タイムゾーンは `$LUNA_HOME/config.toml` のトップレベル `time_zone` で設定可能にする（未設定時はシステムタイムゾーン）。
+- cron prompt は `$LUNA_HOME/workspace/cron.toml` の `[jobs.<id>]` で設定可能にする（`cron` / `prompt` / `oneshot`）。
 
 ## 6. 受け入れ条件
 
@@ -90,3 +94,5 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 9. heartbeat は `[heartbeat].cron_time` で設定したスケジュールで実行される（未設定時は毎時 00 分 / 30 分、タイムゾーン未設定時はシステムタイムゾーン）。
 10. heartbeat 実行時は実装済みの固定プロンプトが渡される。
 11. `allow_dm = false` では DM を処理せず、`allow_dm = true` では DM 投稿を AI へ渡せる。
+12. `workspace/cron.toml` の cron prompt ジョブが定期実行され、`oneshot = true` ジョブは1回試行後に設定ファイルから削除される。
+13. `cron.toml` の変更が再起動なしで反映される。不正設定時は前回有効スケジュールを維持する。

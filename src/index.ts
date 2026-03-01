@@ -13,6 +13,10 @@ import {
   type ReplyGenerator,
 } from "./modules/conversation/adapters/inbound/discord-message-create-handler";
 import {
+  startCronPromptScheduler,
+  type CronPromptSchedulerHandle,
+} from "./modules/heartbeat/cron-prompt-scheduler";
+import {
   startHeartbeatRunner,
   type HeartbeatRunnerHandle,
 } from "./modules/heartbeat/heartbeat-runner";
@@ -87,13 +91,18 @@ const heartbeatRunner = startHeartbeatRunner({
   cronTime: runtimeConfig.heartbeatCronTime,
   logger,
   prompt: HEARTBEAT_PROMPT,
-  ...(runtimeConfig.heartbeatTimeZone === undefined
-    ? {}
-    : { timeZone: runtimeConfig.heartbeatTimeZone }),
+  ...(runtimeConfig.timeZone === undefined ? {} : { timeZone: runtimeConfig.timeZone }),
+});
+const cronPromptScheduler = await startCronPromptScheduler({
+  aiService: heartbeatAiService,
+  logger,
+  ...(runtimeConfig.timeZone === undefined ? {} : { timeZone: runtimeConfig.timeZone }),
+  workspaceDir: runtimeConfig.codexWorkspaceDir,
 });
 
 registerShutdownHooks({
   client,
+  cronPromptScheduler,
   discordMcpServer,
   heartbeatRunner,
   typingLifecycleRegistry,
@@ -125,6 +134,7 @@ client.on("messageCreate", async (message) => {
 
 await client.login(runtimeConfig.discordBotToken).catch(async (error: unknown) => {
   logger.error("Failed to login:", error);
+  await cronPromptScheduler.stop();
   heartbeatRunner.stop();
   await closeDiscordMcpServer(discordMcpServer);
   await closeFileLogging();
@@ -186,6 +196,7 @@ async function closeDiscordMcpServer(discordMcpServer: DiscordMcpServerHandle): 
 
 function registerShutdownHooks(input: {
   client: Client;
+  cronPromptScheduler: CronPromptSchedulerHandle;
   discordMcpServer: DiscordMcpServerHandle;
   heartbeatRunner: HeartbeatRunnerHandle;
   typingLifecycleRegistry: ReturnType<typeof createTypingLifecycleRegistry>;
@@ -199,6 +210,7 @@ function registerShutdownHooks(input: {
     logger.info("Shutting down.", {
       signal,
     });
+    await input.cronPromptScheduler.stop();
     input.heartbeatRunner.stop();
     input.typingLifecycleRegistry.stopAll();
     await input.client.destroy();

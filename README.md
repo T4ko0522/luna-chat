@@ -32,9 +32,11 @@ LUNA_HOME=~/.luna
 DM 応答可否は `[discord].allow_dm` で設定します。
 AI モデルと推論設定は `[ai].model` / `[ai].reasoning_effort` で設定します。
 heartbeat 実行タイミングは `[heartbeat].cron_time` で設定します（既定値は毎時 00 / 30 分）。
-`[heartbeat].time_zone` は任意で、未設定時はシステムのタイムゾーンを使用します。
+`time_zone` は heartbeat と cron prompt の共通タイムゾーンです（未設定時はシステムのタイムゾーンを使用します）。
 
 ```toml
+time_zone = "Asia/Tokyo"
+
 [discord]
 allowed_channel_ids = ["123456789012345678", "234567890123456789"]
 allow_dm = false
@@ -45,14 +47,25 @@ reasoning_effort = "medium"
 
 [heartbeat]
 cron_time = "0 0,30 * * * *"
-# 任意（未設定時はシステムタイムゾーン）
-# time_zone = "Asia/Tokyo"
 ```
 
 `allowed_channel_ids = []`（空配列）でも起動は継続し、その場合 Bot はどのチャンネルにも反応しません。  
 `allow_dm = false` では DM に無反応、`allow_dm = true` では DM 投稿も AI 処理対象になります。  
 `[ai]` を省略した場合は `model="gpt-5.3-codex"` / `reasoning_effort="medium"` が使われます。  
-さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。
+さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。  
+`$LUNA_HOME/workspace/cron.toml` では任意プロンプトの定期実行を設定できます。`[jobs.<id>]` 形式で `cron` / `prompt` / `oneshot` を指定します。`oneshot = true` のジョブは1回試行後に設定ファイルから自動削除されます。`cron.toml` の変更は `chokidar` で監視され、再起動なしで反映されます。
+
+```toml
+[jobs.daily_check]
+cron = "0 0 9 * * *"
+prompt = "朝のチェックを実行し、必要なら報告してください"
+oneshot = false
+
+[jobs.release_once]
+cron = "0 30 12 5 3 *"
+prompt = "リリース日のチェックを1回だけ実行してください"
+oneshot = true
+```
 
 3. Codex の設定・認証を準備
 

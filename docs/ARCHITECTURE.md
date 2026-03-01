@@ -16,7 +16,7 @@
 ## 3. システム境界
 
 - 本体コード: `luna-chat` リポジトリ。
-- ワークスペース: `$LUNA_HOME/workspace`（`LUNA.md` / `SOUL.md` / `HEARTBEAT.md`）。
+- ワークスペース: `$LUNA_HOME/workspace`（`LUNA.md` / `SOUL.md` / `HEARTBEAT.md` / `cron.toml`）。
 - 外部依存:
   - Discord API（`discord.js` / REST）
   - Codex CLI app-server（`codex app-server --listen stdio://`）
@@ -26,7 +26,7 @@
 ### 4.1 Composition Root
 
 - `src/index.ts`
-  - 依存配線（RuntimeConfig / MCP / AI / Heartbeat / Discord Client）
+  - 依存配線（RuntimeConfig / MCP / AI / Heartbeat / Cron Prompt Scheduler / Discord Client）
   - シャットダウン処理（SIGINT/SIGTERM）
 
 ### 4.2 Runtime/Shared
@@ -35,7 +35,7 @@
   - 設定値検証（環境変数: `DISCORD_BOT_TOKEN` / `LUNA_HOME`、設定ファイル: `$LUNA_HOME/config.toml`）
   - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）/ `[discord].allow_dm`（boolean）読み込み（`confbox`）
   - `config.toml` の `[ai].model` / `[ai].reasoning_effort` 読み込み（`confbox`）
-  - `config.toml` の `[heartbeat].cron_time` / `[heartbeat].time_zone` 読み込み（`confbox`）
+  - `config.toml` の `[heartbeat].cron_time` / トップレベル `time_zone` 読み込み（`confbox`）
   - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`, `heartbeat.cron_time = "0 0,30 * * * *"`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
   - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
@@ -91,15 +91,23 @@
 - `src/modules/mcp/ports/outbound/*`
   - MCP application から参照する Discord gateway ポート定義
 
-### 4.6 Typing / Heartbeat
+### 4.6 Typing / Heartbeat / Cron Prompt
 
 - `src/modules/typing/typing-lifecycle-registry.ts`
   - channel/source 単位の typing ループ管理
   - 重複起動防止、停止制御
 - `src/modules/heartbeat/heartbeat-runner.ts`
   - cron（`[heartbeat].cron_time`、未設定時は毎時00/30）実行
-  - `time_zone` 未設定時はシステムタイムゾーンで実行
+  - トップレベル `time_zone` 未設定時はシステムタイムゾーンで実行
   - heartbeat 失敗時ログのみで継続
+- `src/modules/heartbeat/workspace-cron-config.ts`
+  - `workspace/cron.toml` の読み込み・zod検証・cron妥当性検証
+  - `oneshot` 実行後のジョブ削除書き戻し
+- `src/modules/heartbeat/cron-prompt-scheduler.ts`
+  - `workspace/cron.toml` のジョブを cron 実行
+  - `waitForCompletion=true` とランタイム状態で重複実行を抑止
+  - `chokidar` で変更検知しホットリロード
+  - 不正設定時は前回有効スケジュールを維持
 
 ### 4.7 Attachments
 
@@ -175,9 +183,18 @@
 ### 6.4 heartbeat 実行
 
 1. cron（`[heartbeat].cron_time`, `waitForCompletion=true`）で起動する（未設定時 `0 0,30 * * * *`）。
-   - `[heartbeat].time_zone` 未設定時はシステムタイムゾーンを使用する。
+   - `time_zone` 未設定時はシステムタイムゾーンを使用する。
 2. 固定 heartbeat プロンプトを AI に渡す。
 3. 失敗時はログのみ記録して次周期へ継続する。
+
+### 6.5 cron prompt 実行
+
+1. `workspace/cron.toml` の `[jobs.<id>]` から `cron` / `prompt` / `oneshot` を読み込む。
+2. 各ジョブを cron（`waitForCompletion=true`）で起動する。
+3. 同一ジョブが実行中の場合は次tickをスキップする。
+4. `oneshot=true` のジョブは1回試行後に `cron.toml` から削除する（成功/失敗問わず）。
+5. `cron.toml` 変更時は `chokidar` で再読込し、再起動なしで反映する。
+6. 再読込に失敗した場合は、直前の有効ジョブ構成を維持する。
 
 ## 7. 設定
 
@@ -190,7 +207,12 @@
   - `[ai].model`: 文字列（未指定時 `gpt-5.3-codex`）
   - `[ai].reasoning_effort`: `none|minimal|low|medium|high|xhigh`（未指定時 `medium`）
   - `[heartbeat].cron_time`: cron 文字列（未指定時 `0 0,30 * * * *`）
-  - `[heartbeat].time_zone`: IANA タイムゾーン（任意、未指定時はシステムタイムゾーン）
+  - `time_zone`: IANA タイムゾーン（任意、未指定時はシステムタイムゾーン）
+- `$LUNA_HOME/workspace/cron.toml`
+  - `[jobs.<id>]`
+    - `cron`: cron 文字列（必須）
+    - `prompt`: AI へ渡す user prompt（必須）
+    - `oneshot`: boolean（任意、既定 `false`）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
 - 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
 
@@ -210,6 +232,8 @@
   - `src/modules/attachments/index.test.ts`
   - `src/modules/runtime-config/runtime-config.test.ts`
   - `src/modules/heartbeat/heartbeat-runner.test.ts`
+  - `src/modules/heartbeat/workspace-cron-config.test.ts`
+  - `src/modules/heartbeat/cron-prompt-scheduler.test.ts`
   - `src/modules/conversation/adapters/inbound/discord-message-create-handler.integration.test.ts`
   - `src/modules/mcp/inbound/discord-mcp-http-server.test.ts`
 
