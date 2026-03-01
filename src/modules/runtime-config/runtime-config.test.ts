@@ -9,6 +9,7 @@ import { loadRuntimeConfig, RuntimeConfigError } from "./runtime-config";
 
 const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 const DEFAULT_AI_REASONING_EFFORT = "medium";
+const DEFAULT_HEARTBEAT_CRON_TIME = "0 0,30 * * * *";
 
 describe("loadRuntimeConfig", () => {
   it("必須設定のみ読み込む", async () => {
@@ -30,6 +31,8 @@ describe("loadRuntimeConfig", () => {
     expect(config.allowDm).toBe(false);
     expect(config.aiModel).toBe(DEFAULT_AI_MODEL);
     expect(config.aiReasoningEffort).toBe(DEFAULT_AI_REASONING_EFFORT);
+    expect(config.heartbeatCronTime).toBe(DEFAULT_HEARTBEAT_CRON_TIME);
+    expect(config.heartbeatTimeZone).toBeUndefined();
     expect(config.lunaHomeDir).toBe(resolve(lunaHomeDir));
     expect(config.codexWorkspaceDir).toBe(resolve(lunaHomeDir, "workspace"));
     expect(config.codexHomeDir).toBe(resolve(lunaHomeDir, "codex"));
@@ -140,6 +143,35 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
+  it("config.toml の heartbeat 設定を読み込む", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+        heartbeat: {
+          cronTime: "0 */15 * * * *",
+          timeZone: "UTC",
+        },
+      }),
+    );
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(config.heartbeatCronTime).toBe("0 */15 * * * *");
+      expect(config.heartbeatTimeZone).toBe("UTC");
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がなければ自動生成し空配列で起動する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
 
@@ -160,6 +192,9 @@ describe("loadRuntimeConfig", () => {
         ai: {
           model: DEFAULT_AI_MODEL,
           reasoning_effort: DEFAULT_AI_REASONING_EFFORT,
+        },
+        heartbeat: {
+          cron_time: DEFAULT_HEARTBEAT_CRON_TIME,
         },
       });
     } finally {
@@ -509,6 +544,61 @@ reasoning_effort = "medium"
     }
   });
 
+  it("config.toml の heartbeat.cron_time が不正値なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord]
+allowed_channel_ids = ["111"]
+
+[heartbeat]
+cron_time = "invalid-cron"
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("config.toml の heartbeat.time_zone が不正値なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord]
+allowed_channel_ids = ["111"]
+
+[heartbeat]
+cron_time = "0 0,30 * * * *"
+time_zone = "Mars/Phobos"
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("config.toml がファイル以外なら失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
     await mkdir(resolve(lunaHomeDir, "config.toml"), {
@@ -563,6 +653,10 @@ function createConfigToml(input: {
     model: string;
     reasoningEffort: string;
   };
+  heartbeat?: {
+    cronTime: string;
+    timeZone?: string;
+  };
 }): string {
   const channelIds = input.allowedChannelIds.map((channelId) => `"${channelId}"`).join(", ");
   const allowDm = input.allowDm ?? false;
@@ -570,14 +664,24 @@ function createConfigToml(input: {
     model: DEFAULT_AI_MODEL,
     reasoningEffort: DEFAULT_AI_REASONING_EFFORT,
   };
-  return `[discord]
+  const heartbeat = input.heartbeat ?? {
+    cronTime: DEFAULT_HEARTBEAT_CRON_TIME,
+  };
+  const heartbeatTimeZoneLine =
+    heartbeat.timeZone === undefined ? "" : `time_zone = "${heartbeat.timeZone}"\n`;
+  return (
+    `[discord]
 allowed_channel_ids = [${channelIds}]
 allow_dm = ${allowDm}
 
 [ai]
 model = "${ai.model}"
 reasoning_effort = "${ai.reasoningEffort}"
-`;
+
+[heartbeat]
+cron_time = "${heartbeat.cronTime}"
+${heartbeatTimeZoneLine}`.trimEnd() + "\n"
+  );
 }
 
 async function writeConfigToml(lunaHomeDir: string, content: string): Promise<void> {

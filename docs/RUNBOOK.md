@@ -20,8 +20,9 @@
 11. 自己改善ドキュメントの自動更新フローは現時点で未実装。
 12. 秘密情報をログやドキュメントに平文出力しない。
 13. `STATUS.md` は作業ごとに AI が更新する。
-14. heartbeat は毎時 00 分 / 30 分（JST）に自動実行する。
-15. heartbeat 実行時は以下の固定プロンプトを使う。  
+14. heartbeat は `$LUNA_HOME/config.toml` の `[heartbeat].cron_time` に従って自動実行する（未設定時は毎時 00 分 / 30 分）。
+15. `[heartbeat].time_zone` を未設定にした場合、heartbeat はシステムタイムゾーンで実行する。
+16. heartbeat 実行時は以下の固定プロンプトを使う。  
     `HEARTBEAT.md`がワークスペース内に存在する場合はそれを確認し、内容に従って作業を行ってください。過去のチャットで言及された古いタスクを推測したり繰り返してはいけません。特に対応すべき事項がない場合は、そのまま終了してください。
 
 ## 3. 実行手順
@@ -34,8 +35,10 @@
 4. `config.toml` の `[discord].allowed_channel_ids` が文字列配列であることを確認する（空配列は許容）。
 5. `config.toml` の `[discord].allow_dm`（boolean）を必要に応じて設定する（未設定時は `false`）。
 6. `config.toml` の `[ai].model` と `[ai].reasoning_effort`（`none|minimal|low|medium|high|xhigh`）が必要に応じて設定されていることを確認する（未設定時は既定値を使用）。
-7. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
-8. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
+7. `config.toml` の `[heartbeat].cron_time`（cron 文字列）を必要に応じて設定する（未設定時は `0 0,30 * * * *`）。
+8. 必要時のみ `[heartbeat].time_zone`（IANA タイムゾーン）を設定する（未設定時はシステムタイムゾーン）。
+9. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
+10. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
 
 ### 3.2 開発時コマンド
 

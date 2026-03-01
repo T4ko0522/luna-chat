@@ -5,7 +5,7 @@ import type { AiService } from "../ai/ports/inbound/ai-service-port";
 import { startHeartbeatRunner, type HeartbeatCronJobOptions } from "./heartbeat-runner";
 
 describe("startHeartbeatRunner", () => {
-  it("JST の毎時 00/30 分で cron ジョブを起動する", () => {
+  it("既定設定で毎時 00/30 分の cron ジョブを起動する", () => {
     const generateHeartbeat = vi.fn(async () => undefined);
     const logger = createLoggerStub();
     const capture = createCronCapture();
@@ -19,12 +19,34 @@ describe("startHeartbeatRunner", () => {
 
     expect(capture.createCronJob).toHaveBeenCalledTimes(1);
     expect(capture.options?.cronTime).toBe("0 0,30 * * * *");
-    expect(capture.options?.timeZone).toBe("Asia/Tokyo");
+    expect(capture.options?.timeZone).toBeUndefined();
     expect(capture.options?.start).toBe(true);
     expect(capture.options?.waitForCompletion).toBe(true);
     expect(logger.info).toHaveBeenCalledWith("Heartbeat runner started.", {
       cronTime: "0 0,30 * * * *",
-      timeZone: "Asia/Tokyo",
+      timeZone: "system",
+    });
+  });
+
+  it("cronTime と timeZone を指定した場合はその値で起動する", () => {
+    const generateHeartbeat = vi.fn(async () => undefined);
+    const logger = createLoggerStub();
+    const capture = createCronCapture();
+
+    startHeartbeatRunner({
+      aiService: createAiService(generateHeartbeat),
+      createCronJob: capture.createCronJob,
+      cronTime: "0 */15 * * * *",
+      logger,
+      prompt: "HEARTBEAT.mdを確認し、作業を行ってください。",
+      timeZone: "UTC",
+    });
+
+    expect(capture.options?.cronTime).toBe("0 */15 * * * *");
+    expect(capture.options?.timeZone).toBe("UTC");
+    expect(logger.info).toHaveBeenCalledWith("Heartbeat runner started.", {
+      cronTime: "0 */15 * * * *",
+      timeZone: "UTC",
     });
   });
 

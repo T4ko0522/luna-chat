@@ -12,6 +12,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 import { parseTOML, stringifyTOML } from "confbox";
+import { CronTime } from "cron";
 import { z } from "zod";
 
 import type { ReasoningEffort } from "../ai/codex-generated/ReasoningEffort";
@@ -24,6 +25,7 @@ const DEFAULT_TEMPLATES_DIR_NAME = "templates";
 const CONFIG_FILE_NAME = "config.toml";
 const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 const DEFAULT_AI_REASONING_EFFORT: ReasoningEffort = "medium";
+const DEFAULT_HEARTBEAT_CRON_TIME = "0 0,30 * * * *";
 
 const ReasoningEffortSchema = z.union([
   z.literal("none"),
@@ -43,6 +45,10 @@ type RuntimeSettings = {
     model: string;
     reasoning_effort: ReasoningEffort;
   };
+  heartbeat: {
+    cron_time: string;
+    time_zone?: string;
+  };
 };
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
@@ -53,6 +59,9 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   ai: {
     model: DEFAULT_AI_MODEL,
     reasoning_effort: DEFAULT_AI_REASONING_EFFORT,
+  },
+  heartbeat: {
+    cron_time: DEFAULT_HEARTBEAT_CRON_TIME,
   },
 };
 
@@ -67,6 +76,12 @@ const RuntimeSettingsSchema = z.looseObject({
       reasoning_effort: ReasoningEffortSchema.default(DEFAULT_AI_REASONING_EFFORT),
     })
     .default(DEFAULT_RUNTIME_SETTINGS.ai),
+  heartbeat: z
+    .looseObject({
+      cron_time: z.string().trim().min(1).default(DEFAULT_HEARTBEAT_CRON_TIME),
+      time_zone: z.string().trim().min(1).optional(),
+    })
+    .default(DEFAULT_RUNTIME_SETTINGS.heartbeat),
 });
 
 export type RuntimeConfig = {
@@ -75,6 +90,8 @@ export type RuntimeConfig = {
   allowDm: boolean;
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
+  heartbeatCronTime: string;
+  heartbeatTimeZone: string | undefined;
   lunaHomeDir: string;
   codexHomeDir: string;
   codexWorkspaceDir: string;
@@ -123,6 +140,8 @@ export async function loadRuntimeConfig(
     allowDm: runtimeSettings.allowDm,
     aiModel: runtimeSettings.aiModel,
     aiReasoningEffort: runtimeSettings.aiReasoningEffort,
+    heartbeatCronTime: runtimeSettings.heartbeatCronTime,
+    heartbeatTimeZone: runtimeSettings.heartbeatTimeZone,
     lunaHomeDir,
     codexHomeDir,
     codexWorkspaceDir,
@@ -136,24 +155,41 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
   allowDm: boolean;
   aiModel: string;
   aiReasoningEffort: ReasoningEffort;
+  heartbeatCronTime: string;
+  heartbeatTimeZone: string | undefined;
 } {
   const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
   if (!parseResult.success) {
     throw new RuntimeConfigError(
-      "config.toml must define [discord].allowed_channel_ids as an array of strings, optional [discord].allow_dm as a boolean, and optional [ai].model/[ai].reasoning_effort.",
+      "config.toml must define [discord].allowed_channel_ids as an array of strings, optional [discord].allow_dm as a boolean, optional [ai].model/[ai].reasoning_effort, and optional [heartbeat].cron_time/[heartbeat].time_zone.",
     );
   }
 
   const allowedChannelIds = parseResult.data.discord.allowed_channel_ids
     .map((channelId) => channelId.trim())
     .filter((channelId) => channelId.length > 0);
+  const heartbeatCronTime = parseResult.data.heartbeat.cron_time;
+  const heartbeatTimeZone = parseResult.data.heartbeat.time_zone;
+  validateHeartbeatSchedule(heartbeatCronTime, heartbeatTimeZone);
 
   return {
     allowedChannelIds: new Set(allowedChannelIds),
     allowDm: parseResult.data.discord.allow_dm,
     aiModel: parseResult.data.ai.model,
     aiReasoningEffort: parseResult.data.ai.reasoning_effort,
+    heartbeatCronTime,
+    heartbeatTimeZone,
   };
+}
+
+function validateHeartbeatSchedule(cronTime: string, timeZone: string | undefined): void {
+  try {
+    new CronTime(cronTime, timeZone);
+  } catch {
+    throw new RuntimeConfigError(
+      "config.toml has invalid [heartbeat] settings: [heartbeat].cron_time must be a valid cron expression and [heartbeat].time_zone must be a valid IANA time zone when specified.",
+    );
+  }
 }
 
 async function ensureConfigFileExists(lunaHomeDir: string): Promise<string> {

@@ -35,7 +35,8 @@
   - 設定値検証（環境変数: `DISCORD_BOT_TOKEN` / `LUNA_HOME`、設定ファイル: `$LUNA_HOME/config.toml`）
   - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）/ `[discord].allow_dm`（boolean）読み込み（`confbox`）
   - `config.toml` の `[ai].model` / `[ai].reasoning_effort` 読み込み（`confbox`）
-  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`）
+  - `config.toml` の `[heartbeat].cron_time` / `[heartbeat].time_zone` 読み込み（`confbox`）
+  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`, `allow_dm = false`, `model = "gpt-5.3-codex"`, `reasoning_effort = "medium"`, `heartbeat.cron_time = "0 0,30 * * * *"`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
   - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
 - `src/shared/logger.ts`
@@ -96,7 +97,8 @@
   - channel/source 単位の typing ループ管理
   - 重複起動防止、停止制御
 - `src/modules/heartbeat/heartbeat-runner.ts`
-  - cron（毎時00/30, JST）実行
+  - cron（`[heartbeat].cron_time`、未設定時は毎時00/30）実行
+  - `time_zone` 未設定時はシステムタイムゾーンで実行
   - heartbeat 失敗時ログのみで継続
 
 ### 4.7 Attachments
@@ -172,7 +174,8 @@
 
 ### 6.4 heartbeat 実行
 
-1. cron（`0 0,30 * * * *`, `Asia/Tokyo`, `waitForCompletion=true`）で起動する。
+1. cron（`[heartbeat].cron_time`, `waitForCompletion=true`）で起動する（未設定時 `0 0,30 * * * *`）。
+   - `[heartbeat].time_zone` 未設定時はシステムタイムゾーンを使用する。
 2. 固定 heartbeat プロンプトを AI に渡す。
 3. 失敗時はログのみ記録して次周期へ継続する。
 
@@ -186,6 +189,8 @@
   - 空配列でも起動継続（Bot は許可チャンネルなし状態で待機）
   - `[ai].model`: 文字列（未指定時 `gpt-5.3-codex`）
   - `[ai].reasoning_effort`: `none|minimal|low|medium|high|xhigh`（未指定時 `medium`）
+  - `[heartbeat].cron_time`: cron 文字列（未指定時 `0 0,30 * * * *`）
+  - `[heartbeat].time_zone`: IANA タイムゾーン（任意、未指定時はシステムタイムゾーン）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
 - 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
 

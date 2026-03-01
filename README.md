@@ -31,6 +31,8 @@ LUNA_HOME=~/.luna
 許可チャンネルは `config.toml` の `[discord].allowed_channel_ids` で設定します。
 DM 応答可否は `[discord].allow_dm` で設定します。
 AI モデルと推論設定は `[ai].model` / `[ai].reasoning_effort` で設定します。
+heartbeat 実行タイミングは `[heartbeat].cron_time` で設定します（既定値は毎時 00 / 30 分）。
+`[heartbeat].time_zone` は任意で、未設定時はシステムのタイムゾーンを使用します。
 
 ```toml
 [discord]
@@ -40,6 +42,11 @@ allow_dm = false
 [ai]
 model = "gpt-5.3-codex"
 reasoning_effort = "medium"
+
+[heartbeat]
+cron_time = "0 0,30 * * * *"
+# 任意（未設定時はシステムタイムゾーン）
+# time_zone = "Asia/Tokyo"
 ```
 
 `allowed_channel_ids = []`（空配列）でも起動は継続し、その場合 Bot はどのチャンネルにも反応しません。  

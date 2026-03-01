@@ -3,7 +3,6 @@ import { CronJob } from "cron";
 import type { AiService } from "../ai/ports/inbound/ai-service-port";
 
 const DEFAULT_HEARTBEAT_CRON = "0 0,30 * * * *";
-const DEFAULT_HEARTBEAT_TIME_ZONE = "Asia/Tokyo";
 
 type HeartbeatLogger = {
   info: (...arguments_: unknown[]) => void;
@@ -18,7 +17,7 @@ export type HeartbeatCronJobOptions = {
   cronTime: string;
   onTick: () => Promise<void>;
   start: boolean;
-  timeZone: string;
+  timeZone?: string;
   waitForCompletion: boolean;
 };
 
@@ -39,7 +38,7 @@ export type HeartbeatRunnerHandle = {
 
 export function startHeartbeatRunner(input: StartHeartbeatRunnerInput): HeartbeatRunnerHandle {
   const cronTime = input.cronTime ?? DEFAULT_HEARTBEAT_CRON;
-  const timeZone = input.timeZone ?? DEFAULT_HEARTBEAT_TIME_ZONE;
+  const timeZone = input.timeZone;
 
   const job = (input.createCronJob ?? createCronJob)({
     cronTime,
@@ -49,13 +48,13 @@ export function startHeartbeatRunner(input: StartHeartbeatRunnerInput): Heartbea
       });
     },
     start: true,
-    timeZone,
+    ...(timeZone === undefined ? {} : { timeZone }),
     waitForCompletion: true,
   });
 
   input.logger.info("Heartbeat runner started.", {
     cronTime,
-    timeZone,
+    timeZone: timeZone ?? "system",
   });
 
   return {

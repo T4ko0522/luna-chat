@@ -84,8 +84,12 @@ const heartbeatAiService = new ChannelSessionCoordinator({
 
 const heartbeatRunner = startHeartbeatRunner({
   aiService: heartbeatAiService,
+  cronTime: runtimeConfig.heartbeatCronTime,
   logger,
   prompt: HEARTBEAT_PROMPT,
+  ...(runtimeConfig.heartbeatTimeZone === undefined
+    ? {}
+    : { timeZone: runtimeConfig.heartbeatTimeZone }),
 });
 
 registerShutdownHooks({
