@@ -1,3 +1,4 @@
+import { logger } from "../../../../../shared/logger";
 import type { ClientNotification } from "../../../codex-generated/ClientNotification";
 import type { ClientRequest } from "../../../codex-generated/ClientRequest";
 import type { RequestId } from "../../../codex-generated/RequestId";
@@ -111,11 +112,15 @@ export function createJsonRpcClient(processHandle: StdioProcessHandle): JsonRpcC
     },
     request: async (method, params) => {
       const id = nextRequestId++;
-      processHandle.writeLine({
+      const requestMessage = {
         id,
         method,
         params,
+      };
+      logger.debug("codex.rpc.request.outbound", {
+        payload: requestMessage,
       });
+      processHandle.writeLine(requestMessage);
 
       return await new Promise((resolve, reject) => {
         pendingRequests.set(id, { reject, resolve });
@@ -139,6 +144,10 @@ function handleLine(input: {
   }
 
   if (isResponse(message)) {
+    logger.debug("codex.rpc.response.inbound", {
+      payload: message,
+    });
+
     const pendingRequestKey = resolvePendingRequestKey(input.pendingRequests, message.id);
     if (pendingRequestKey === undefined) {
       return;
@@ -161,6 +170,10 @@ function handleLine(input: {
 
   const serverRequest = parseInboundRequest(message);
   if (serverRequest) {
+    logger.debug("codex.rpc.request.inbound", {
+      payload: serverRequest,
+    });
+
     void handleServerRequestAsync(serverRequest, input.processHandle).catch((error: unknown) => {
       input.rejectPendingRequests(
         new Error(error instanceof Error ? error.message : "Failed to handle app-server request."),
@@ -184,7 +197,7 @@ async function handleServerRequestAsync(
     const response: CommandExecutionRequestApprovalResponse = {
       decision: "decline",
     };
-    processHandle.writeLine({
+    writeRpcResponse(processHandle, {
       id: request.id,
       result: response,
     });
@@ -195,7 +208,7 @@ async function handleServerRequestAsync(
     const response: FileChangeRequestApprovalResponse = {
       decision: "decline",
     };
-    processHandle.writeLine({
+    writeRpcResponse(processHandle, {
       id: request.id,
       result: response,
     });
@@ -211,20 +224,30 @@ async function handleServerRequestAsync(
         }),
       ),
     };
-    processHandle.writeLine({
+    writeRpcResponse(processHandle, {
       id: request.id,
       result: response,
     });
     return;
   }
 
-  processHandle.writeLine({
+  writeRpcResponse(processHandle, {
     error: {
       code: -32601,
       message: `Unsupported client-side method: ${request.method}`,
     },
     id: request.id,
   });
+}
+
+function writeRpcResponse(
+  processHandle: StdioProcessHandle,
+  message: JsonRpcResponseMessage,
+): void {
+  logger.debug("codex.rpc.response.outbound", {
+    payload: message,
+  });
+  processHandle.writeLine(message);
 }
 
 const APPROVAL_POLICIES = [
@@ -359,11 +382,30 @@ function isResponse(message: unknown): message is JsonRpcResponseMessage {
   if (!isRecord(message)) {
     return false;
   }
-  if (!isRequestId(message["id"])) {
+  const id = message["id"];
+  if (!isRequestId(id)) {
     return false;
   }
 
-  return true;
+  const method = message["method"];
+  if (typeof method === "string") {
+    return false;
+  }
+
+  const hasResult = "result" in message;
+  const hasError = isRpcError(message["error"]);
+  return hasResult || hasError;
+}
+
+function isRpcError(value: unknown): value is {
+  code: number;
+  message: string;
+} {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value["code"] === "number" && typeof value["message"] === "string";
 }
 
 function isNotification(message: unknown): message is JsonRpcNotificationMessage {

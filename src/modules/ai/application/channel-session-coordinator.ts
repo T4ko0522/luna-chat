@@ -85,13 +85,6 @@ export class ChannelSessionCoordinator implements AiService {
           turnResult.errorMessage ?? `app-server turn status is ${turnResult.status}`;
         throw new Error(errorMessage);
       }
-    } catch (error: unknown) {
-      logger.debug("ai.heartbeat.failed", {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        threadId,
-        turnId,
-      });
-      throw error;
     } finally {
       runtime.close();
     }
@@ -148,11 +141,6 @@ export class ChannelSessionCoordinator implements AiService {
       await turnCompletion;
     } catch (error: unknown) {
       this.disposeSession(session);
-      logger.debug("ai.turn.failed", {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        messageId: input.currentMessage.id,
-        threadId: session.threadId,
-      });
       throw error;
     }
   }
@@ -174,20 +162,8 @@ export class ChannelSessionCoordinator implements AiService {
 
     try {
       await session.runtime.steerTurn(session.threadId, expectedTurnId, steerPrompt);
-      logger.debug("ai.turn.steered", {
-        channelId: session.channelId,
-        messageId: currentMessage.id,
-        threadId: session.threadId,
-        turnId: expectedTurnId,
-      });
       return true;
-    } catch (error: unknown) {
-      logger.debug("ai.turn.steer_failed", {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        messageId: currentMessage.id,
-        threadId: session.threadId,
-        turnId: expectedTurnId,
-      });
+    } catch {
       await this.startTurn(session, {
         messageId: currentMessage.id,
         prompt: steerPrompt,
@@ -353,35 +329,11 @@ function logTurnResult(
   turnId: string,
   turnResult: TurnResult,
 ): void {
-  logger.debug("ai.turn.assistant_output", {
-    assistantText: turnResult.assistantText,
-    threadId,
-    turnId,
-  });
-  for (const toolCall of turnResult.mcpToolCalls) {
-    logger.debug("ai.turn.mcp_tool_call", {
-      arguments: toolCall.arguments,
-      server: toolCall.server,
-      status: toolCall.status,
-      threadId,
-      tool: toolCall.tool,
-      turnId,
-    });
-  }
-
   logger.info("ai.turn.completed", {
     ...toTurnLogContextFields(context),
     errorMessage: turnResult.errorMessage,
     ...(turnResult.tokenUsage ? { tokenUsage: turnResult.tokenUsage } : {}),
     status: turnResult.status,
-    threadId,
-    turnId,
-  });
-
-  logger.debug("ai.turn.completed", {
-    errorMessage: turnResult.errorMessage,
-    status: turnResult.status,
-    ...(turnResult.tokenUsage ? { tokenUsage: turnResult.tokenUsage } : {}),
     threadId,
     turnId,
   });

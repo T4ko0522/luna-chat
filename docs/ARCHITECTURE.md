@@ -65,7 +65,7 @@
   - thread config 生成（`model_reasoning_effort` + MCP URL）
 - `src/modules/ai/adapters/outbound/codex/*`
   - `codex-ai-runtime.ts`: app-server 実行ランタイム
-  - `json-rpc-client.ts`: JSON-RPC req/resp・server request 応答
+  - `json-rpc-client.ts`: JSON-RPC req/resp・server request 応答（req/resp は双方向で debug ログ出力）
   - `turn-result-collector.ts`: turnイベント集約
   - `stdio-process.ts`: 子プロセス制御
 - `src/modules/ai/domain/turn-result.ts`

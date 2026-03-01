@@ -2,7 +2,7 @@
 
 ## 1. 最終更新
 
-- 2026-02-28
+- 2026-03-01
 - 更新者: AI
 
 ## 2. 現在の真実（Project Truth）
@@ -26,6 +26,7 @@
 - AI は必要時に MCP tool `get_user_detail` で `userId` と `channelId` から `user`（基本ユーザー情報 + `displayName` / `nickname`）を取得できる。
 - AI turn の開始/終了は `info` ログへ出力し、終了時には `thread/tokenUsage/updated` 由来のトークン使用量（`last`/`total` 内訳）を含める。
 - MCP tool 呼び出しは開始時/終了時の両タイミングで `info` ログを出力する。
+- Codex app-server との JSON-RPC は request/response を双方向で `debug` ログ出力する（`notification` は対象外）。
 - アプリケーションログは標準出力に加えて `$LUNA_HOME/logs/YYYYMMDD-HHmmss-SSS.log` へ JSONL でも出力する。
 - ログファイル出力の初期化に失敗した場合は起動を中断する（fail-fast）。
 - `list_channels` / `get_user_detail` は権限不足・未存在などの失敗対象を黙ってスキップする。

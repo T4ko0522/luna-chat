@@ -89,7 +89,6 @@ export type MessageLike = {
 };
 
 type LoggerLike = {
-  debug?: (...arguments_: unknown[]) => void;
   info: (...arguments_: unknown[]) => void;
   warn: (...arguments_: unknown[]) => void;
   error: (...arguments_: unknown[]) => void;
@@ -147,11 +146,6 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
     botUserId: input.botUserId,
     logger: input.logger,
     message,
-  });
-  input.logger.debug?.("discord.message.received_for_ai_turn", {
-    channelId: currentMessage.channelId,
-    mentionedBot: currentMessage.mentionedBot,
-    messageId: currentMessage.id,
   });
 
   const stopTypingLoop = currentMessage.mentionedBot
