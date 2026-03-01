@@ -7,7 +7,7 @@
 
 ## 2. 現在の真実（Project Truth）
 
-- 返信判定は `ALLOWED_CHANNEL_IDS` + 非DM + 非スレッドのみで行う。
+- 返信判定は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` + 非DM + 非スレッドのみで行う。
 - メンション有無は `mentionedBot` として保持するが、返信優先制御には使っていない。
 - Bot投稿は無視し、許可チャンネル投稿を AI へ渡す。
 - AI 入力には現在メッセージに加えて、同一チャンネルの直近 10 件履歴を初期投入する。
@@ -22,7 +22,7 @@
 - `send_message` の返信投稿では `allowed_mentions.replied_user=true` として返信先ユーザーへ通知する。
 - AI は必要時に MCP tool `start_typing` で入力中表示を開始できる（8 秒間隔）。
 - `start_typing` で開始した入力中表示は、Discord turn 完了時に自動停止する。
-- AI は必要時に MCP tool `list_channels` で `ALLOWED_CHANNEL_IDS` に含まれるチャンネル一覧を取得できる。
+- AI は必要時に MCP tool `list_channels` で `[discord].allowed_channel_ids` に含まれるチャンネル一覧を取得できる。
 - AI は必要時に MCP tool `get_user_detail` で `userId` と `channelId` から `user`（基本ユーザー情報 + `displayName` / `nickname`）を取得できる。
 - AI turn の開始/終了は `info` ログへ出力し、終了時には `thread/tokenUsage/updated` 由来のトークン使用量（`last`/`total` 内訳）を含める。
 - MCP tool 呼び出しは開始時/終了時の両タイミングで `info` ログを出力する。
@@ -39,7 +39,9 @@
 - typing 管理は `typing-lifecycle-registry` で一元化している。
 - メンション起点の typing は message handler の `finally` で停止し、tool 起点の typing は Discord turn 完了時コールバックで停止する。
 - AI 呼び出し失敗時はフォールバック返信せず、ログ記録のみで終了する。
-- 設定は `DISCORD_BOT_TOKEN` / `ALLOWED_CHANNEL_IDS` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
+- 設定は `DISCORD_BOT_TOKEN` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
+- 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）から読み込む。
+- `config.toml` が存在しない場合は起動時に自動生成し、`allowed_channel_ids = []` で起動継続する。
 - 起動時に `LUNA_HOME` / `workspace` / `codex` / `logs` を自動作成する。
 - 起動時に `templates` 直下の通常ファイルを `workspace` へ不足分のみコピーし、既存ファイルは上書きしない。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。

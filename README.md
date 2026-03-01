@@ -22,12 +22,20 @@ pnpm install
 
 ```bash
 DISCORD_BOT_TOKEN=your_bot_token
-ALLOWED_CHANNEL_IDS=123456789012345678,234567890123456789
 # 任意 未指定時は ~/.luna
 LUNA_HOME=~/.luna
 ```
 
 `LUNA_HOME` は起動時に自動作成され、`$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` も自動で準備されます。  
+さらに `$LUNA_HOME/config.toml` が存在しない場合は起動時に自動生成されます。  
+許可チャンネルは `config.toml` の `[discord].allowed_channel_ids` で設定します。
+
+```toml
+[discord]
+allowed_channel_ids = ["123456789012345678", "234567890123456789"]
+```
+
+`allowed_channel_ids = []`（空配列）でも起動は継続し、その場合 Bot はどのチャンネルにも反応しません。  
 さらに `templates` 直下の通常ファイルについて、`$LUNA_HOME/workspace` に同名ファイルが存在しない場合のみ自動でコピーされます（既存ファイルは上書きしません）。
 
 3. Codex の設定・認証を準備

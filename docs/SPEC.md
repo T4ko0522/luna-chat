@@ -27,7 +27,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - AI は必要に応じて tool use（`send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail`）を使う。
 - `send_message` は任意の `replyToMessageId` を受け取り、指定時は該当メッセージへの返信として投稿する。
 - `start_typing` で開始した入力中表示は Discord turn 完了時に自動停止する。
-- `list_channels` は `ALLOWED_CHANNEL_IDS` に含まれるチャンネル情報のみを返し、各チャンネルに `guildId` と `guildName` を含める（チャンネル種別の数値は返さない）。
+- `list_channels` は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` に含まれるチャンネル情報のみを返し、各チャンネルに `guildId` と `guildName` を含める（チャンネル種別の数値は返さない）。
 - `get_user_detail` は `userId` と `channelId` を受け取り、`user` として基本ユーザー情報に `displayName` / `nickname` を加えた単一オブジェクトを返す（対象ユーザーが取得できない場合は `user=null`）。
 
 ### 3.2 文脈取得
@@ -67,7 +67,8 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 ## 5. 設定要件
 
 - 複数チャンネル ID を設定可能にする。
-- 例: `ALLOWED_CHANNEL_IDS=1234567890,2345678901`
+- 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）で設定する。
+- 例: `allowed_channel_ids = ["1234567890", "2345678901"]`
 
 ## 6. 受け入れ条件
 

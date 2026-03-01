@@ -32,7 +32,9 @@
 ### 4.2 Runtime/Shared
 
 - `src/modules/runtime-config/runtime-config.ts`
-  - 環境変数検証（`DISCORD_BOT_TOKEN` / `ALLOWED_CHANNEL_IDS` / `LUNA_HOME`）
+  - 設定値検証（環境変数: `DISCORD_BOT_TOKEN` / `LUNA_HOME`、設定ファイル: `$LUNA_HOME/config.toml`）
+  - `config.toml` の `[discord].allowed_channel_ids`（文字列配列）読み込み（`confbox`）
+  - `config.toml` 未存在時の自動生成（`allowed_channel_ids = []`）
   - `LUNA_HOME` / `workspace` / `codex` / `logs` の自動作成・書込可否検証
   - `templates` 直下の通常ファイルを `workspace` へ不足分のみ自動コピー（既存は非上書き）
 - `src/shared/logger.ts`
@@ -176,8 +178,10 @@
 ## 7. 設定
 
 - `DISCORD_BOT_TOKEN`: 必須
-- `ALLOWED_CHANNEL_IDS`: 必須（カンマ区切り）
 - `LUNA_HOME`: 任意（未設定時 `~/.luna`）
+- `$LUNA_HOME/config.toml`: 起動時に自動生成（未存在時）
+  - `[discord].allowed_channel_ids`: 文字列配列（例: `["123","456"]`）
+  - 空配列でも起動継続（Bot は許可チャンネルなし状態で待機）
 - 起動時に `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` を自動作成する
 - 起動時に `templates` 直下の通常ファイルを `$LUNA_HOME/workspace` へ不足分のみコピーする
 

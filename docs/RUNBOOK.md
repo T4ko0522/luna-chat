@@ -7,7 +7,7 @@
 
 ## 2. 不変ルール
 
-1. 返信対象は `ALLOWED_CHANNEL_IDS` に含まれるチャンネルのみ。
+1. 返信対象は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` に含まれるチャンネルのみ。
 2. 指定チャンネル内の投稿（メンション有無を問わない）を AI 処理対象とする。
 3. `mentionedBot` は AI 入力へ含めるが、ハンドラで優先制御しない。
 4. スレッドと DM は現時点で非対応。
@@ -29,10 +29,11 @@
 ### 3.1 起動前チェック
 
 1. `DISCORD_BOT_TOKEN` が設定されていることを確認する。
-2. `ALLOWED_CHANNEL_IDS` が 1 件以上設定されていることを確認する。
-3. `LUNA_HOME` 未設定時は `~/.luna` を使用することを確認する。
-4. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
-5. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
+2. `LUNA_HOME` 未設定時は `~/.luna` を使用することを確認する。
+3. `$LUNA_HOME/config.toml` が存在しない場合は初回起動で自動生成されることを確認する。
+4. `config.toml` の `[discord].allowed_channel_ids` が文字列配列であることを確認する（空配列は許容）。
+5. 起動時に `LUNA_HOME` / `$LUNA_HOME/workspace` / `$LUNA_HOME/codex` / `$LUNA_HOME/logs` が自動作成されることを確認する。
+6. 起動時に `templates` 直下の通常ファイルが `$LUNA_HOME/workspace` へ不足分のみコピーされ、既存ファイルは上書きされないことを確認する。
 
 ### 3.2 開発時コマンド
 

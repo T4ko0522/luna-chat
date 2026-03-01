@@ -1,12 +1,43 @@
-import { access, constants, copyFile, mkdir, readdir, stat } from "node:fs/promises";
+import {
+  access,
+  constants,
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+
+import { parseTOML, stringifyTOML } from "confbox";
+import { z } from "zod";
 
 const DEFAULT_LUNA_HOME = "~/.luna";
 const WORKSPACE_DIR_NAME = "workspace";
 const CODEX_HOME_DIR_NAME = "codex";
 const LOGS_DIR_NAME = "logs";
 const DEFAULT_TEMPLATES_DIR_NAME = "templates";
+const CONFIG_FILE_NAME = "config.toml";
+
+type RuntimeSettings = {
+  discord: {
+    allowed_channel_ids: string[];
+  };
+};
+
+const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
+  discord: {
+    allowed_channel_ids: [],
+  },
+};
+
+const RuntimeSettingsSchema = z.looseObject({
+  discord: z.looseObject({
+    allowed_channel_ids: z.array(z.string()),
+  }),
+});
 
 export type RuntimeConfig = {
   discordBotToken: string;
@@ -37,7 +68,6 @@ export async function loadRuntimeConfig(
     throw new RuntimeConfigError("DISCORD_BOT_TOKEN is required.");
   }
 
-  const allowedChannelIds = parseAllowedChannelIds(env["ALLOWED_CHANNEL_IDS"]);
   const lunaHomeDir = resolveLunaHome(env["LUNA_HOME"]);
   const codexWorkspaceDir = resolve(lunaHomeDir, WORKSPACE_DIR_NAME);
   const codexHomeDir = resolve(lunaHomeDir, CODEX_HOME_DIR_NAME);
@@ -47,6 +77,9 @@ export async function loadRuntimeConfig(
   await ensureDirectoryReady(codexWorkspaceDir, "workspace must be a writable directory.");
   await ensureDirectoryReady(codexHomeDir, "codex home must be a writable directory.");
   await ensureDirectoryReady(logsDir, "logs directory must be a writable directory.");
+  const configPath = await ensureConfigFileExists(lunaHomeDir);
+  const config = await loadConfigToml(configPath);
+  const allowedChannelIds = parseAllowedChannelIdsFromConfig(config);
   await seedWorkspaceTemplatesIfMissing(
     codexWorkspaceDir,
     resolveTemplatesDir(options.templatesDir),
@@ -62,20 +95,58 @@ export async function loadRuntimeConfig(
   };
 }
 
-function parseAllowedChannelIds(rawAllowedChannelIds: string | undefined): ReadonlySet<string> {
-  if (!rawAllowedChannelIds) {
-    throw new RuntimeConfigError("ALLOWED_CHANNEL_IDS is required.");
+function parseAllowedChannelIdsFromConfig(rawConfig: unknown): ReadonlySet<string> {
+  const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
+  if (!parseResult.success) {
+    throw new RuntimeConfigError(
+      "config.toml must define [discord].allowed_channel_ids as an array of strings.",
+    );
   }
 
-  const allowedChannelIds = rawAllowedChannelIds
-    .split(",")
+  const allowedChannelIds = parseResult.data.discord.allowed_channel_ids
     .map((channelId) => channelId.trim())
     .filter((channelId) => channelId.length > 0);
-  if (allowedChannelIds.length === 0) {
-    throw new RuntimeConfigError("ALLOWED_CHANNEL_IDS must include at least one channel ID.");
-  }
 
   return new Set(allowedChannelIds);
+}
+
+async function ensureConfigFileExists(lunaHomeDir: string): Promise<string> {
+  const configPath = resolve(lunaHomeDir, CONFIG_FILE_NAME);
+  const configPathType = await detectPathType(configPath);
+
+  if (configPathType === "file") {
+    return configPath;
+  }
+  if (configPathType === "non-file") {
+    throw new RuntimeConfigError("config.toml must be a file.");
+  }
+
+  try {
+    await writeFile(configPath, stringifyTOML(DEFAULT_RUNTIME_SETTINGS), {
+      flag: "wx",
+    });
+    return configPath;
+  } catch (error: unknown) {
+    if (hasNodeErrorCode(error, "EEXIST")) {
+      return configPath;
+    }
+    throw new RuntimeConfigError("failed to create default config.toml.");
+  }
+}
+
+async function loadConfigToml(configPath: string): Promise<unknown> {
+  let rawConfigToml: string;
+  try {
+    rawConfigToml = await readFile(configPath, "utf8");
+  } catch {
+    throw new RuntimeConfigError("config.toml must be readable.");
+  }
+
+  try {
+    return parseTOML(rawConfigToml);
+  } catch {
+    throw new RuntimeConfigError("config.toml is invalid TOML.");
+  }
 }
 
 function resolveTemplatesDir(rawTemplatesDir: string | undefined): string {
@@ -179,4 +250,14 @@ async function detectPathType(path: string): Promise<"missing" | "file" | "non-f
   } catch {
     return "missing";
   }
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (!("code" in error)) {
+    return false;
+  }
+  return error.code === code;
 }

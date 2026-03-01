@@ -2,6 +2,7 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { parseTOML } from "confbox";
 import { describe, expect, it } from "vitest";
 
 import { loadRuntimeConfig, RuntimeConfigError } from "./runtime-config";
@@ -9,8 +10,14 @@ import { loadRuntimeConfig, RuntimeConfigError } from "./runtime-config";
 describe("loadRuntimeConfig", () => {
   it("必須設定のみ読み込む", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111", " 222 ", "333", "222", " "],
+      }),
+    );
+
     const config = await loadRuntimeConfig({
-      ALLOWED_CHANNEL_IDS: "111, 222,333",
       LUNA_HOME: lunaHomeDir,
       DISCORD_BOT_TOKEN: "token",
     });
@@ -37,17 +44,24 @@ describe("loadRuntimeConfig", () => {
     process.env["HOME"] = testHome;
 
     const relativeLunaHome = `.luna-runtime-config-test-${Date.now()}`;
+    const expandedLunaHome = resolve(testHome, relativeLunaHome);
+    await writeConfigToml(
+      expandedLunaHome,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+
     try {
       const config = await loadRuntimeConfig({
-        ALLOWED_CHANNEL_IDS: "111",
         LUNA_HOME: `~/${relativeLunaHome}`,
         DISCORD_BOT_TOKEN: "token",
       });
 
-      expect(config.lunaHomeDir).toBe(resolve(testHome, relativeLunaHome));
-      expect(config.codexWorkspaceDir).toBe(resolve(testHome, relativeLunaHome, "workspace"));
-      expect(config.codexHomeDir).toBe(resolve(testHome, relativeLunaHome, "codex"));
-      expect(config.logsDir).toBe(resolve(testHome, relativeLunaHome, "logs"));
+      expect(config.lunaHomeDir).toBe(expandedLunaHome);
+      expect(config.codexWorkspaceDir).toBe(resolve(expandedLunaHome, "workspace"));
+      expect(config.codexHomeDir).toBe(resolve(expandedLunaHome, "codex"));
+      expect(config.logsDir).toBe(resolve(expandedLunaHome, "logs"));
 
       await rm(config.lunaHomeDir, {
         force: true,
@@ -66,8 +80,39 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
+  it("config.toml がなければ自動生成し空配列で起動する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(Array.from(config.allowedChannelIds)).toEqual([]);
+      expect(await exists(resolve(lunaHomeDir, "config.toml"))).toBe(true);
+      const generatedConfigToml = await readFile(resolve(lunaHomeDir, "config.toml"), "utf8");
+      expect(parseTOML(generatedConfigToml)).toEqual({
+        discord: {
+          allowed_channel_ids: [],
+        },
+      });
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   it("workspace と codex と logs ディレクトリを自動作成する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const workspaceDir = resolve(lunaHomeDir, "workspace");
     const codexHomeDir = resolve(lunaHomeDir, "codex");
     const logsDir = resolve(lunaHomeDir, "logs");
@@ -85,7 +130,6 @@ describe("loadRuntimeConfig", () => {
     });
 
     await loadRuntimeConfig({
-      ALLOWED_CHANNEL_IDS: "111",
       LUNA_HOME: lunaHomeDir,
       DISCORD_BOT_TOKEN: "token",
     });
@@ -102,6 +146,12 @@ describe("loadRuntimeConfig", () => {
 
   it("workspace に templates の不足ファイルを補完する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const templatesDir = await createTempTemplatesDir({
       "LUNA.md": "LUNA template",
       "SOUL.md": "SOUL template",
@@ -109,7 +159,6 @@ describe("loadRuntimeConfig", () => {
     try {
       await loadRuntimeConfig(
         {
-          ALLOWED_CHANNEL_IDS: "111",
           LUNA_HOME: lunaHomeDir,
           DISCORD_BOT_TOKEN: "token",
         },
@@ -138,6 +187,12 @@ describe("loadRuntimeConfig", () => {
 
   it("workspace に既存ファイルがあれば templates で上書きしない", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const workspaceDir = resolve(lunaHomeDir, "workspace");
     const templatesDir = await createTempTemplatesDir({
       "LUNA.md": "LUNA template",
@@ -151,7 +206,6 @@ describe("loadRuntimeConfig", () => {
     try {
       await loadRuntimeConfig(
         {
-          ALLOWED_CHANNEL_IDS: "111",
           LUNA_HOME: lunaHomeDir,
           DISCORD_BOT_TOKEN: "token",
         },
@@ -176,6 +230,12 @@ describe("loadRuntimeConfig", () => {
 
   it("templates 直下の通常ファイルのみを workspace へ補完する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const templatesDir = await createTempTemplatesDir({
       "LUNA.md": "LUNA template",
     });
@@ -188,7 +248,6 @@ describe("loadRuntimeConfig", () => {
     try {
       await loadRuntimeConfig(
         {
-          ALLOWED_CHANNEL_IDS: "111",
           LUNA_HOME: lunaHomeDir,
           DISCORD_BOT_TOKEN: "token",
         },
@@ -213,12 +272,17 @@ describe("loadRuntimeConfig", () => {
 
   it("templates ディレクトリが存在しない場合は失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const missingTemplatesDir = createTempLunaHomeDir();
     try {
       await expect(
         loadRuntimeConfig(
           {
-            ALLOWED_CHANNEL_IDS: "111",
             LUNA_HOME: lunaHomeDir,
             DISCORD_BOT_TOKEN: "token",
           },
@@ -237,6 +301,12 @@ describe("loadRuntimeConfig", () => {
 
   it("workspace の同名パスがファイル以外なら失敗する", async () => {
     const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
     const workspaceDir = resolve(lunaHomeDir, "workspace");
     const templatesDir = await createTempTemplatesDir({
       "LUNA.md": "LUNA template",
@@ -249,7 +319,6 @@ describe("loadRuntimeConfig", () => {
       await expect(
         loadRuntimeConfig(
           {
-            ALLOWED_CHANNEL_IDS: "111",
             LUNA_HOME: lunaHomeDir,
             DISCORD_BOT_TOKEN: "token",
           },
@@ -270,26 +339,113 @@ describe("loadRuntimeConfig", () => {
     }
   });
 
-  it("ALLOWED_CHANNEL_IDS が空なら失敗する", async () => {
-    await expect(
-      loadRuntimeConfig({
-        ALLOWED_CHANNEL_IDS: " ,  ",
-        DISCORD_BOT_TOKEN: "token",
-      }),
-    ).rejects.toThrowError(RuntimeConfigError);
+  it("config.toml の TOML 構文が不正なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord
+allowed_channel_ids = ["111"]
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("config.toml の allowed_channel_ids が配列でなければ失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      `[discord]
+allowed_channel_ids = "111,222"
+`,
+    );
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("config.toml がファイル以外なら失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await mkdir(resolve(lunaHomeDir, "config.toml"), {
+      recursive: true,
+    });
+
+    try {
+      await expect(
+        loadRuntimeConfig({
+          LUNA_HOME: lunaHomeDir,
+          DISCORD_BOT_TOKEN: "token",
+        }),
+      ).rejects.toThrowError(RuntimeConfigError);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
   });
 
   it("DISCORD_BOT_TOKEN がなければ失敗する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+
     await expect(
       loadRuntimeConfig({
-        ALLOWED_CHANNEL_IDS: "111",
+        LUNA_HOME: lunaHomeDir,
       }),
     ).rejects.toThrowError(RuntimeConfigError);
+
+    await rm(lunaHomeDir, {
+      force: true,
+      recursive: true,
+    });
   });
 });
 
 function createTempLunaHomeDir(): string {
   return resolve(join(tmpdir(), `luna-runtime-config-${Date.now()}-${Math.random().toString(16)}`));
+}
+
+function createConfigToml(input: { allowedChannelIds: string[] }): string {
+  const channelIds = input.allowedChannelIds.map((channelId) => `"${channelId}"`).join(", ");
+  return `[discord]
+allowed_channel_ids = [${channelIds}]
+`;
+}
+
+async function writeConfigToml(lunaHomeDir: string, content: string): Promise<void> {
+  await mkdir(lunaHomeDir, {
+    recursive: true,
+  });
+  await writeFile(resolve(lunaHomeDir, "config.toml"), content);
 }
 
 async function createTempTemplatesDir(files: Record<string, string>): Promise<string> {
