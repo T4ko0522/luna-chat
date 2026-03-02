@@ -27,8 +27,8 @@ import {
   formatStartTypingContent,
 } from "./discord-mcp-response-text";
 
-const DEFAULT_HISTORY_LIMIT = 30;
-const MAX_HISTORY_LIMIT = 100;
+const DEFAULT_HISTORY_LIMIT = 10;
+const MAX_HISTORY_LIMIT = 50;
 const DISCORD_MCP_HOSTNAME = "127.0.0.1";
 const DISCORD_MCP_PATH = "/mcp";
 const HISTORY_CURSOR_INPUT_ERROR_MESSAGE =
