@@ -165,7 +165,7 @@ export class ChannelSessionCoordinator implements AiService {
     if (session.activeTurnId) {
       const expectedTurnId = session.activeTurnId;
       const steerPrompt = buildSteerPrompt({
-        channelName: input.channelName,
+        context: input.context,
         message: input.currentMessage,
         ...(includeRecentMessages ? { recentMessages } : {}),
       });
@@ -190,7 +190,7 @@ export class ChannelSessionCoordinator implements AiService {
 
     const promptBundle = await buildPromptBundle(
       {
-        channelName: input.channelName,
+        context: input.context,
         currentMessage: input.currentMessage,
         recentMessages,
       },

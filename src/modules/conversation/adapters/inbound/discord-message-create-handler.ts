@@ -95,7 +95,14 @@ type LoggerLike = {
 };
 
 export type GenerateReplyInput = {
-  channelName: string;
+  context:
+    | {
+        kind: "channel";
+        channelName: string;
+      }
+    | {
+        kind: "dm";
+      };
   currentMessage: RuntimeMessage;
   loadRecentMessages: () => Promise<RuntimeMessage[]>;
 };
@@ -164,7 +171,7 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
 
   try {
     await input.aiService.generateReply({
-      channelName: resolveChannelName(message.channel.name),
+      context: resolvePromptContext(message),
       currentMessage,
       loadRecentMessages: async () => {
         return await fetchRecentMessages({
@@ -430,4 +437,19 @@ function resolveChannelName(channelName: string | null | undefined): string {
   }
 
   return trimmed;
+}
+
+function resolvePromptContext(
+  message: Pick<MessageLike, "inGuild" | "channel">,
+): GenerateReplyInput["context"] {
+  if (!message.inGuild()) {
+    return {
+      kind: "dm",
+    };
+  }
+
+  return {
+    kind: "channel",
+    channelName: resolveChannelName(message.channel.name),
+  };
 }

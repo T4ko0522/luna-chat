@@ -162,7 +162,10 @@ describe("handleMessageCreate integration", () => {
 
     expect(fetchHistory).not.toHaveBeenCalled();
     expect(aiInput).toEqual({
-      channelName: "general",
+      context: {
+        kind: "channel",
+        channelName: "general",
+      },
       currentMessage: {
         authorId: "author",
         authorIsBot: false,
@@ -244,6 +247,13 @@ describe("handleMessageCreate integration", () => {
     });
 
     expect(generateReply).toHaveBeenCalledTimes(1);
+    const aiInput = generateReply.mock.calls[0]?.[0];
+    if (!aiInput) {
+      throw new Error("generateReply was not called.");
+    }
+    expect(aiInput.context).toEqual({
+      kind: "dm",
+    });
   });
 
   it("スレッド投稿は無反応", async () => {
@@ -478,7 +488,10 @@ describe("handleMessageCreate integration", () => {
     if (!aiInput) {
       throw new Error("generateReply was not called.");
     }
-    expect(aiInput.channelName).toBe("unknown");
+    expect(aiInput.context).toEqual({
+      kind: "channel",
+      channelName: "unknown",
+    });
     await expect(aiInput.loadRecentMessages()).resolves.toEqual([]);
     expect(logger.warn).toHaveBeenCalled();
   });

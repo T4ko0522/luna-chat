@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
+import type { DiscordPromptContext } from "../ports/inbound/ai-service-port";
 
 import { buildHeartbeatPromptBundle, buildPromptBundle, buildSteerPrompt } from "./prompt-composer";
 
@@ -20,7 +21,7 @@ describe("buildPromptBundle", () => {
 
       expect(promptBundle.userRolePrompt).toContain("テスト本文");
       expect(promptBundle.userRolePrompt).not.toContain("forceReply");
-      expect(promptBundle.userRolePrompt).toContain("新しいDiscordの投稿です。");
+      expect(promptBundle.userRolePrompt).toContain("新しいチャンネルメッセージです。");
       expect(promptBundle.userRolePrompt).not.toContain("以下は現在の入力情報です。");
 
       const recentMessagesIndex = promptBundle.userRolePrompt.indexOf("## 直近のメッセージ");
@@ -239,6 +240,18 @@ describe("buildPromptBundle", () => {
     });
   });
 
+  it("DMの場合はユーザー名ヘッダーを出力する", async () => {
+    await withWorkspaceDir(async (workspaceDir) => {
+      const input = createDmInput();
+      const promptBundle = await buildPromptBundle(input, workspaceDir);
+
+      expect(promptBundle.userRolePrompt).toContain("新しいダイレクトメッセージです。");
+      expect(promptBundle.userRolePrompt).toContain("ユーザー名: author-name (ID: author-id)");
+      expect(promptBundle.userRolePrompt).not.toContain("チャンネル名:");
+      expect(promptBundle.userRolePrompt).toMatchSnapshot();
+    });
+  });
+
   it("RUNBOOK 由来の文字列を含めない", async () => {
     await withWorkspaceDir(async (workspaceDir) => {
       const promptBundle = await buildPromptBundle(createInput(), workspaceDir);
@@ -319,12 +332,12 @@ describe("buildSteerPrompt", () => {
   it("追加メッセージ見出し付きでメッセージ本文を生成する", () => {
     const input = createInput();
     const steerPrompt = buildSteerPrompt({
-      channelName: input.channelName,
+      context: input.context,
       message: input.currentMessage,
     });
 
     expect(steerPrompt).toMatch(
-      /^新しいDiscordの投稿です。\nチャンネル名: channel-name \(ID: channel-id\)\n\n## 投稿されたメッセージ\n\n\[2026-02-23 09:00:00 JST\] author-name \(ID: author-id\) \(Message ID: message-id\):\nテスト本文$/,
+      /^新しいチャンネルメッセージです。\nチャンネル名: channel-name \(ID: channel-id\)\n\n## 投稿されたメッセージ\n\n\[2026-02-23 09:00:00 JST\] author-name \(ID: author-id\) \(Message ID: message-id\):\nテスト本文$/,
     );
     expect(steerPrompt).toMatchSnapshot();
   });
@@ -342,7 +355,7 @@ describe("buildSteerPrompt", () => {
     };
 
     const steerPrompt = buildSteerPrompt({
-      channelName: input.channelName,
+      context: input.context,
       message,
     });
 
@@ -371,7 +384,7 @@ describe("buildSteerPrompt", () => {
     ];
 
     const steerPrompt = buildSteerPrompt({
-      channelName: input.channelName,
+      context: input.context,
       message,
     });
 
@@ -382,7 +395,7 @@ describe("buildSteerPrompt", () => {
   it("未注入チャンネルの場合は初期履歴セクションを追加する", () => {
     const input = createInput();
     const steerPrompt = buildSteerPrompt({
-      channelName: input.channelName,
+      context: input.context,
       message: input.currentMessage,
       recentMessages: input.recentMessages,
     });
@@ -391,15 +404,67 @@ describe("buildSteerPrompt", () => {
     expect(steerPrompt).toContain("recent-message-id");
     expect(steerPrompt).toMatchSnapshot();
   });
+
+  it("DMの場合はユーザー名ヘッダーとDM履歴見出しを出力する", () => {
+    const input = createDmInput();
+    const steerPrompt = buildSteerPrompt({
+      context: input.context,
+      message: input.currentMessage,
+      recentMessages: input.recentMessages,
+    });
+
+    expect(steerPrompt).toContain("新しいダイレクトメッセージです。");
+    expect(steerPrompt).toContain("ユーザー名: author-name (ID: author-id)");
+    expect(steerPrompt).toContain("## このDMの初期履歴");
+    expect(steerPrompt).not.toContain("チャンネル名:");
+    expect(steerPrompt).toMatchSnapshot();
+  });
 });
 
 function createInput(): {
-  channelName: string;
+  context: DiscordPromptContext;
   currentMessage: RuntimeMessage;
   recentMessages: RuntimeMessage[];
 } {
   return {
-    channelName: "channel-name",
+    context: {
+      kind: "channel",
+      channelName: "channel-name",
+    },
+    currentMessage: {
+      authorId: "author-id",
+      authorIsBot: false,
+      authorName: "author-name",
+      channelId: "channel-id",
+      content: "テスト本文",
+      createdAt: "2026-02-23 09:00:00 JST",
+      id: "message-id",
+      mentionedBot: false,
+    },
+    recentMessages: [
+      {
+        authorId: "recent-author-id",
+        authorIsBot: true,
+        authorName: "recent-author-name",
+        channelId: "channel-id",
+        content: "直近メッセージ",
+        createdAt: "2026-02-23 08:59:00 JST",
+        id: "recent-message-id",
+        mentionedBot: false,
+      },
+    ],
+  };
+}
+
+function createDmInput(): {
+  context: DiscordPromptContext;
+  currentMessage: RuntimeMessage;
+  recentMessages: RuntimeMessage[];
+} {
+  return {
+    context: {
+      kind: "dm",
+    },
     currentMessage: {
       authorId: "author-id",
       authorIsBot: false,

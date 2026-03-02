@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import { formatMessageAuthorLabel } from "../../../shared/discord/message-author-label";
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
+import type { DiscordPromptContext } from "../ports/inbound/ai-service-port";
 
 type PromptBundle = {
   instructions: string;
@@ -11,13 +12,13 @@ type PromptBundle = {
 };
 
 type PromptBundleInput = {
-  channelName: string;
+  context: DiscordPromptContext;
   currentMessage: RuntimeMessage;
   recentMessages: RuntimeMessage[];
 };
 
 type BuildSteerPromptInput = {
-  channelName: string;
+  context: DiscordPromptContext;
   message: RuntimeMessage;
   recentMessages?: RuntimeMessage[];
 };
@@ -34,11 +35,7 @@ export async function buildPromptBundle(
 ): Promise<PromptBundle> {
   const instructions = await buildInstructions(workspaceDir);
   const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
-  const userRolePromptLines = [
-    "新しいDiscordの投稿です。",
-    `チャンネル名: ${input.channelName} (ID: ${input.currentMessage.channelId})`,
-    "",
-  ];
+  const userRolePromptLines = buildPromptHeaderLines(input.context, input.currentMessage);
   if (recentMessages.length > 0) {
     userRolePromptLines.push("## 直近のメッセージ", "", recentMessages.join("\n\n"), "");
   }
@@ -66,17 +63,18 @@ function formatRuntimeMessageForPrompt(message: RuntimeMessage): string {
 }
 
 export function buildSteerPrompt(input: BuildSteerPromptInput): string {
-  const lines = [
-    "新しいDiscordの投稿です。",
-    `チャンネル名: ${input.channelName} (ID: ${input.message.channelId})`,
-    "",
-  ];
+  const lines = buildPromptHeaderLines(input.context, input.message);
 
   if (input.recentMessages !== undefined) {
     const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
     const recentMessagesSection =
       recentMessages.length > 0 ? recentMessages.join("\n\n") : "(none)";
-    lines.push("## このチャンネルの初期履歴", "", recentMessagesSection, "");
+    lines.push(
+      input.context.kind === "dm" ? "## このDMの初期履歴" : "## このチャンネルの初期履歴",
+      "",
+      recentMessagesSection,
+      "",
+    );
   }
 
   lines.push("## 投稿されたメッセージ", "", formatRuntimeMessageForPrompt(input.message));
@@ -101,6 +99,25 @@ function formatRuntimeMessageMetaLine(
   message: Pick<RuntimeMessage, "id" | "authorId" | "authorIsBot" | "authorName" | "createdAt">,
 ): string {
   return `[${message.createdAt}] ${formatMessageAuthorLabel(message)} (Message ID: ${message.id}):`;
+}
+
+function buildPromptHeaderLines(
+  context: DiscordPromptContext,
+  message: Pick<RuntimeMessage, "authorId" | "authorName" | "channelId">,
+): string[] {
+  if (context.kind === "dm") {
+    return [
+      "新しいダイレクトメッセージです。",
+      `ユーザー名: ${message.authorName} (ID: ${message.authorId})`,
+      "",
+    ];
+  }
+
+  return [
+    "新しいチャンネルメッセージです。",
+    `チャンネル名: ${context.channelName} (ID: ${message.channelId})`,
+    "",
+  ];
 }
 
 function toQuotedBlock(block: string): string {

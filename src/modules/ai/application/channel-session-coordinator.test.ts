@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
 import type { TurnResult } from "../domain/turn-result";
+import type { DiscordPromptContext } from "../ports/inbound/ai-service-port";
 import type { AiRuntimePort } from "../ports/outbound/ai-runtime-port";
 import type { StartedTurn, TurnObserver } from "../ports/outbound/ai-runtime-port";
 
@@ -372,7 +373,7 @@ function createAiInput(
     loadRecentMessages?: () => Promise<RuntimeMessage[]>;
   } = {},
 ): {
-  channelName: string;
+  context: DiscordPromptContext;
   currentMessage: RuntimeMessage;
   loadRecentMessages: () => Promise<RuntimeMessage[]>;
 } {
@@ -389,7 +390,10 @@ function createAiInput(
   };
 
   return {
-    channelName: `channel-${channelId}`,
+    context: {
+      kind: "channel",
+      channelName: `channel-${channelId}`,
+    },
     currentMessage,
     loadRecentMessages:
       options.loadRecentMessages ??
