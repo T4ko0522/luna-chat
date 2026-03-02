@@ -1,3 +1,4 @@
+import { formatDateTimeJst } from "../../../../../shared/discord/format-date-time-jst";
 import { toRuntimeReactions } from "../../../../../shared/discord/runtime-reaction";
 import type { RuntimeReaction } from "../../../../../shared/discord/runtime-reaction";
 import type {
@@ -90,13 +91,13 @@ export function createDiscordRestHistoryGateway(
         throw error;
       }
     },
-    fetchMessages: async ({ beforeMessageId, channelId, limit }) => {
-      const query = new URLSearchParams();
-      query.set("limit", String(limit));
-      if (beforeMessageId) {
-        query.set("before", beforeMessageId);
-      }
-
+    fetchMessages: async ({
+      afterMessageId,
+      aroundMessageId,
+      beforeMessageId,
+      channelId,
+      limit,
+    }) => {
       const channel = await client.channels.fetch(channelId, {
         force: true,
       });
@@ -104,11 +105,12 @@ export function createDiscordRestHistoryGateway(
         return [];
       }
 
-      const before = query.get("before");
       const fetchedMessages = await channel.messages.fetch({
         cache: false,
         limit,
-        ...(before === null ? {} : { before }),
+        ...(beforeMessageId === undefined ? {} : { before: beforeMessageId }),
+        ...(afterMessageId === undefined ? {} : { after: afterMessageId }),
+        ...(aroundMessageId === undefined ? {} : { around: aroundMessageId }),
       });
       const rawMessages = toCollectionValues(fetchedMessages);
       const normalizedMessages = rawMessages
@@ -254,7 +256,13 @@ function toDiscordGuildMemberDetail(input: {
 
 function isHistoryReadableChannel(channel: unknown): channel is {
   messages: {
-    fetch: (input: { before?: string; cache: false; limit: number }) => Promise<unknown>;
+    fetch: (input: {
+      after?: string;
+      around?: string;
+      before?: string;
+      cache: false;
+      limit: number;
+    }) => Promise<unknown>;
   };
 } {
   if (typeof channel !== "object" || channel === null) {
@@ -315,7 +323,7 @@ function toDiscordHistoryMessage(rawMessage: unknown): DiscordHistoryMessageWith
       authorIsBot: authorIsBot === true,
       authorName,
       content,
-      createdAt: createdAt.toISOString(),
+      createdAt: formatDateTimeJst(createdAt),
       id,
       ...(reactions ? { reactions } : {}),
     },

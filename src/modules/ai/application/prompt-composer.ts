@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { formatMessageAuthorLabel } from "../../../shared/discord/message-author-label";
+import { formatPlainTextMessageWithReply } from "../../../shared/discord/plain-text-message";
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
 import type { DiscordPromptContext } from "../ports/inbound/ai-service-port";
 
@@ -23,7 +24,9 @@ const DEVELOPER_ROLE_PROMPT = [
 ].join("\n");
 
 export function buildUserRolePrompt(input: UserRolePromptInput): string {
-  const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
+  const recentMessages = input.recentMessages.map((message) => {
+    return formatRuntimeMessageForPrompt(message);
+  });
   const userRolePromptLines = buildPromptHeaderLines(input.context, input.currentMessage);
   if (recentMessages.length > 0) {
     userRolePromptLines.push("## 直近のメッセージ", "", recentMessages.join("\n\n"), "");
@@ -37,32 +40,26 @@ export function buildUserRolePrompt(input: UserRolePromptInput): string {
 }
 
 function formatRuntimeMessageForPrompt(message: RuntimeMessage): string {
-  const messageBlock = formatRuntimeMessageBlock(message);
-  if (!message.replyTo) {
-    return messageBlock;
-  }
-
-  return [toQuotedBlock(formatRuntimeMessageBlock(message.replyTo)), messageBlock].join("\n");
-}
-
-function formatRuntimeMessageBlock(
-  message: Pick<
-    RuntimeMessage,
-    "id" | "authorId" | "authorIsBot" | "authorName" | "content" | "createdAt" | "reactions"
-  >,
-): string {
-  const lines = [formatRuntimeMessageMetaLine(message), message.content];
-  if (message.reactions && message.reactions.length > 0) {
-    lines.push(`リアクション: ${formatRuntimeReactions(message.reactions)}`);
-  }
-
-  return lines.join("\n");
-}
-
-function formatRuntimeMessageMetaLine(
-  message: Pick<RuntimeMessage, "id" | "authorId" | "authorIsBot" | "authorName" | "createdAt">,
-): string {
-  return `[${message.createdAt}] ${formatMessageAuthorLabel(message)} (Message ID: ${message.id}):`;
+  return formatPlainTextMessageWithReply({
+    message: {
+      authorLabel: formatMessageAuthorLabel(message),
+      content: message.content,
+      createdAt: message.createdAt,
+      id: message.id,
+      ...(message.reactions ? { reactions: message.reactions } : {}),
+    },
+    ...(message.replyTo
+      ? {
+          replyTo: {
+            authorLabel: formatMessageAuthorLabel(message.replyTo),
+            content: message.replyTo.content,
+            createdAt: message.replyTo.createdAt,
+            id: message.replyTo.id,
+            ...(message.replyTo.reactions ? { reactions: message.replyTo.reactions } : {}),
+          },
+        }
+      : {}),
+  });
 }
 
 function buildPromptHeaderLines(
@@ -82,21 +79,6 @@ function buildPromptHeaderLines(
     `チャンネル名: ${context.channelName} (ID: ${message.channelId})`,
     "",
   ];
-}
-
-function toQuotedBlock(block: string): string {
-  return block
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n");
-}
-
-function formatRuntimeReactions(reactions: NonNullable<RuntimeMessage["reactions"]>): string {
-  return reactions
-    .map((reaction) => {
-      return `${reaction.emoji} x${reaction.count}${reaction.selfReacted ? " (自分済み)" : ""}`;
-    })
-    .join(", ");
 }
 
 export async function buildHeartbeatPromptBundle(

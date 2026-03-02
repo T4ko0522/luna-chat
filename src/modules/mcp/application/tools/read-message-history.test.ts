@@ -15,7 +15,7 @@ describe("readMessageHistory", () => {
             authorIsBot: true,
             authorName: "ルナ",
             content: "新しいメッセージ",
-            createdAt: "2026-01-01T00:01:00.000Z",
+            createdAt: "2026-01-01 09:01:00 JST",
             id: "m2",
             reactions: [
               {
@@ -37,7 +37,7 @@ describe("readMessageHistory", () => {
             authorIsBot: false,
             authorName: "Alice",
             content: "古いメッセージ",
-            createdAt: "2026-01-01T00:00:00.000Z",
+            createdAt: "2026-01-01 09:00:00 JST",
             id: "m1",
           },
         ];
@@ -61,6 +61,66 @@ describe("readMessageHistory", () => {
     });
 
     expect(payload).toMatchSnapshot();
+  });
+
+  it("afterMessageId を gateway へ渡す", async () => {
+    const fetchMessages: DiscordHistoryGateway["fetchMessages"] = vi.fn(async () => []);
+    const gateway = createGatewayStub({
+      fetchMessages,
+    });
+
+    await readMessageHistory({
+      afterMessageId: "message-after",
+      channelId: "channel-1",
+      decorator: vi.fn(async ({ content }) => content),
+      gateway,
+      limit: 30,
+    });
+
+    expect(fetchMessages).toHaveBeenCalledWith({
+      afterMessageId: "message-after",
+      channelId: "channel-1",
+      limit: 30,
+    });
+  });
+
+  it("aroundMessageId を gateway へ渡す", async () => {
+    const fetchMessages: DiscordHistoryGateway["fetchMessages"] = vi.fn(async () => []);
+    const gateway = createGatewayStub({
+      fetchMessages,
+    });
+
+    await readMessageHistory({
+      aroundMessageId: "message-around",
+      channelId: "channel-1",
+      decorator: vi.fn(async ({ content }) => content),
+      gateway,
+      limit: 30,
+    });
+
+    expect(fetchMessages).toHaveBeenCalledWith({
+      aroundMessageId: "message-around",
+      channelId: "channel-1",
+      limit: 30,
+    });
+  });
+
+  it("before/after/around を同時指定した場合はエラーにする", async () => {
+    const gateway = createGatewayStub();
+
+    await expect(
+      readMessageHistory({
+        afterMessageId: "after",
+        aroundMessageId: "around",
+        beforeMessageId: "before",
+        channelId: "channel-1",
+        decorator: vi.fn(async ({ content }) => content),
+        gateway,
+        limit: 30,
+      }),
+    ).rejects.toThrow(
+      "beforeMessageId / afterMessageId / aroundMessageId は同時に指定できません。",
+    );
   });
 });
 

@@ -10,7 +10,12 @@ export type AttachmentContentDecorator = (input: {
   messageId: string;
 }) => Promise<string>;
 
+const HISTORY_CURSOR_INPUT_ERROR_MESSAGE =
+  "beforeMessageId / afterMessageId / aroundMessageId は同時に指定できません。";
+
 export async function readMessageHistory(input: {
+  afterMessageId?: string;
+  aroundMessageId?: string;
   beforeMessageId?: string;
   channelId: string;
   decorator: AttachmentContentDecorator;
@@ -28,7 +33,13 @@ export async function readMessageHistory(input: {
     reactions?: RuntimeReaction[];
   }>;
 }> {
+  if (!hasExclusiveHistoryCursor(input)) {
+    throw new Error(HISTORY_CURSOR_INPUT_ERROR_MESSAGE);
+  }
+
   const fetched = await input.gateway.fetchMessages({
+    ...(input.afterMessageId === undefined ? {} : { afterMessageId: input.afterMessageId }),
+    ...(input.aroundMessageId === undefined ? {} : { aroundMessageId: input.aroundMessageId }),
     channelId: input.channelId,
     limit: input.limit,
     ...(input.beforeMessageId === undefined ? {} : { beforeMessageId: input.beforeMessageId }),
@@ -59,4 +70,15 @@ export async function readMessageHistory(input: {
     channelId: input.channelId,
     messages,
   };
+}
+
+function hasExclusiveHistoryCursor(input: {
+  afterMessageId?: string;
+  aroundMessageId?: string;
+  beforeMessageId?: string;
+}): boolean {
+  const cursors = [input.beforeMessageId, input.afterMessageId, input.aroundMessageId].filter(
+    (value) => value !== undefined,
+  );
+  return cursors.length <= 1;
 }

@@ -87,6 +87,7 @@
 - `src/modules/mcp/inbound/discord-mcp-http-server.ts`
   - `/mcp` HTTP サーバー起動
   - tool 登録（`read_message_history` / `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail`）
+  - tool 結果をプレーンテキストで返却
 - `src/modules/mcp/application/tools/*`
   - tool 単位のユースケース実装
 - `src/modules/mcp/adapters/outbound/discord/*`
@@ -179,9 +180,11 @@
 ### 6.3 履歴追加取得（tool use）
 
 1. AI が `read_message_history` を呼ぶ。
-2. `limit` は 1〜100（既定30）に制限する。
-3. Discord API レスポンスを zod で検証し、不正要素はスキップする。
-4. 添付を保存して `<attachment:...>` を追記し、昇順で返す。
+2. `beforeMessageId` / `afterMessageId` / `aroundMessageId` のいずれか1つを任意指定できる（同時指定不可）。
+3. `limit` は 1〜100（既定30）に制限する。
+4. Discord API レスポンスを zod で検証し、不正要素はスキップする。
+5. 添付を保存して `<attachment:...>` を追記し、昇順で返す。
+6. MCP tool の返却は構造化JSONではなくプレーンテキストを返す。
 
 ### 6.4 heartbeat 実行
 

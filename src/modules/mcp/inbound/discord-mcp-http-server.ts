@@ -18,27 +18,52 @@ import { sendMessageTool } from "../application/tools/send-message";
 import { startTypingTool } from "../application/tools/start-typing";
 import type { DiscordCommandTarget } from "../ports/outbound/discord-command-gateway-port";
 
+import {
+  formatAddReactionContent,
+  formatGetUserDetailContent,
+  formatListChannelsContent,
+  formatReadMessageHistoryContent,
+  formatSendMessageContent,
+  formatStartTypingContent,
+} from "./discord-mcp-response-text";
+
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 100;
 const DISCORD_MCP_HOSTNAME = "127.0.0.1";
 const DISCORD_MCP_PATH = "/mcp";
+const HISTORY_CURSOR_INPUT_ERROR_MESSAGE =
+  "beforeMessageId / afterMessageId / aroundMessageId は同時に指定できません。";
 const TARGET_INPUT_ERROR_MESSAGE = "channelId と userId のどちらか一方のみ指定してください。";
 
-const fetchHistoryInputSchema = z.object({
-  beforeMessageId: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("このメッセージIDより前の履歴を取得する。未指定時は最新から取得する。"),
-  channelId: z.string().min(1).describe("履歴を取得するDiscordチャンネルID。"),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_HISTORY_LIMIT)
-    .optional()
-    .describe(`取得件数。1〜${MAX_HISTORY_LIMIT}。未指定時は${DEFAULT_HISTORY_LIMIT}。`),
-});
+const fetchHistoryInputSchema = z
+  .object({
+    afterMessageId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("このメッセージIDより後の履歴を取得する。"),
+    aroundMessageId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("このメッセージIDの前後を含む履歴を取得する。"),
+    beforeMessageId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("このメッセージIDより前の履歴を取得する。未指定時は最新から取得する。"),
+    channelId: z.string().min(1).describe("履歴を取得するDiscordチャンネルID。"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_HISTORY_LIMIT)
+      .optional()
+      .describe(`取得件数。1〜${MAX_HISTORY_LIMIT}。未指定時は${DEFAULT_HISTORY_LIMIT}。`),
+  })
+  .refine(hasExclusiveHistoryCursor, {
+    message: HISTORY_CURSOR_INPUT_ERROR_MESSAGE,
+  });
 
 const sendReplyInputSchema = z
   .object({
@@ -131,9 +156,11 @@ export async function startDiscordMcpServer(
       inputSchema: fetchHistoryInputSchema,
       title: "Discord履歴取得",
     },
-    async ({ beforeMessageId, channelId, limit }) => {
+    async ({ afterMessageId, aroundMessageId, beforeMessageId, channelId, limit }) => {
       const boundedLimit = Math.min(limit ?? DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT);
       const payload = await readMessageHistory({
+        ...(afterMessageId === undefined ? {} : { afterMessageId }),
+        ...(aroundMessageId === undefined ? {} : { aroundMessageId }),
         channelId,
         ...(beforeMessageId === undefined ? {} : { beforeMessageId }),
         decorator: async (input) => {
@@ -151,8 +178,7 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [{ text: formatReadMessageHistoryContent(payload), type: "text" }],
       };
     },
   );
@@ -165,7 +191,7 @@ export async function startDiscordMcpServer(
       title: "Discord送信",
     },
     async ({ channelId, replyToMessageId, text, userId }) => {
-      const payload = await sendMessageTool({
+      await sendMessageTool({
         gateway: commandGateway,
         target: toCommandTarget({
           channelId,
@@ -176,8 +202,16 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [
+          {
+            text: formatSendMessageContent({
+              ...(channelId === undefined ? {} : { channelId }),
+              ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
+              ...(userId === undefined ? {} : { userId }),
+            }),
+            type: "text",
+          },
+        ],
       };
     },
   );
@@ -190,7 +224,7 @@ export async function startDiscordMcpServer(
       title: "Discordリアクション追加",
     },
     async ({ channelId, emoji, messageId, userId }) => {
-      const payload = await addReactionTool({
+      await addReactionTool({
         emoji,
         gateway: commandGateway,
         messageId,
@@ -201,8 +235,17 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [
+          {
+            text: formatAddReactionContent({
+              ...(channelId === undefined ? {} : { channelId }),
+              emoji,
+              messageId,
+              ...(userId === undefined ? {} : { userId }),
+            }),
+            type: "text",
+          },
+        ],
       };
     },
   );
@@ -225,8 +268,16 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [
+          {
+            text: formatStartTypingContent({
+              alreadyRunning: payload.alreadyRunning,
+              ...(channelId === undefined ? {} : { channelId }),
+              ...(userId === undefined ? {} : { userId }),
+            }),
+            type: "text",
+          },
+        ],
       };
     },
   );
@@ -245,8 +296,7 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [{ text: formatListChannelsContent(payload), type: "text" }],
       };
     },
   );
@@ -267,8 +317,7 @@ export async function startDiscordMcpServer(
       });
 
       return {
-        content: [{ text: JSON.stringify(payload), type: "text" }],
-        structuredContent: payload,
+        content: [{ text: formatGetUserDetailContent(payload), type: "text" }],
       };
     },
   );
@@ -310,6 +359,17 @@ function hasExclusiveTarget(input: {
   userId?: string | undefined;
 }): boolean {
   return (input.channelId === undefined) !== (input.userId === undefined);
+}
+
+function hasExclusiveHistoryCursor(input: {
+  afterMessageId?: string | undefined;
+  aroundMessageId?: string | undefined;
+  beforeMessageId?: string | undefined;
+}): boolean {
+  const cursors = [input.beforeMessageId, input.afterMessageId, input.aroundMessageId].filter(
+    (value) => value !== undefined,
+  );
+  return cursors.length <= 1;
 }
 
 function toCommandTarget(input: {

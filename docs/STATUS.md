@@ -12,8 +12,9 @@
 - Bot投稿は無視し、Guildでは許可チャンネル投稿、DMでは `allow_dm=true` の投稿を AI へ渡す。
 - AI 入力には現在メッセージを渡し、セッション内で未注入チャンネルの場合のみ直近 10 件履歴を初期投入する。
 - AI 入力メッセージには、リアクションが存在する場合のみ絵文字別 `reactions` を含める（`selfReacted` はBot自身が該当絵文字でリアクション済みのときのみ付与）。
-- 追加履歴は MCP tool `read_message_history` で取得できる（1〜100件、未指定30件）。
+- 追加履歴は MCP tool `read_message_history` で取得できる（1〜100件、未指定30件、`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他指定）。
 - `read_message_history` の返却メッセージにも、リアクションがある場合のみ `reactions` を含める。
+- Discord MCP の tool レスポンスは `structuredContent` ではなくプレーンテキストを返す。
 - 添付ファイルはワークスペースへ保存し、本文末尾へ `<attachment:...>` マーカーを追記する。
 - 添付処理は `src/modules/attachments`（domain/ports/application/adapters）へ集約し、`conversation` と `mcp` の重複実装を解消している。
 - 返信・リアクションは MCP tool `send_message` / `add_reaction` を使用する。

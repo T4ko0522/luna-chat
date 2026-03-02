@@ -13,7 +13,7 @@
 4. スレッドは常に非対応。DM は `[discord].allow_dm` で有効/無効を切り替える。
 5. 会話ログ本文は永続保存しない。
 6. AI 入力には現在メッセージを必ず含め、セッション内で未注入チャンネルの場合のみ直近 10 件を追加する。
-7. 追加履歴は `read_message_history` で都度取得できる。
+7. 追加履歴は `read_message_history` で都度取得できる（`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他指定）。
 8. AI は必要時に `start_typing` で入力中表示を開始でき、Discord turn 完了時に自動停止される。
 9. Bot 直接メンション時の自動 typing 送信も継続する。
 10. ワークスペース（`$LUNA_HOME/workspace`）のドキュメントを AI instructions に読み込む。
@@ -58,7 +58,7 @@
 
 1. 受信イベントでチャンネル判定（スレッド除外、DMは`allow_dm`で判定、Guildは許可外除外）を実施する。
 2. 現在メッセージを AI に渡し、未注入チャンネルの場合のみ直近 10 件を初回注入する。
-3. AI は必要時に `read_message_history` / `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を使用する。`send_message` は任意の `replyToMessageId` 指定時に返信投稿として送信する。
+3. AI は必要時に `read_message_history` / `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を使用する。`send_message` は任意の `replyToMessageId` 指定時に返信投稿として送信する。MCP tool の応答はプレーンテキストで返る。
 4. AI エラー時は返信せず終了し、失敗ログを確認する。
 5. アプリケーションログは標準出力に加えて `$LUNA_HOME/logs/YYYYMMDD-HHmmss-SSS.log`（JSONL）にも出力される。
 6. heartbeat 実行が失敗してもプロセスは継続し、次の cron 周期で再実行する。

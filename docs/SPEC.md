@@ -36,6 +36,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - `start_typing` で開始した入力中表示は Discord turn 完了時に自動停止する。
 - `list_channels` は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` に含まれるチャンネル情報のみを返し、各チャンネルに `guildId` と `guildName` を含める（チャンネル種別の数値は返さない）。
 - `get_user_detail` は `userId` と `channelId` を受け取り、`user` として基本ユーザー情報に `displayName` / `nickname` を加えた単一オブジェクトを返す（対象ユーザーが取得できない場合は `user=null`）。
+- Discord MCP の tool レスポンスは JSON 文字列ではなくプレーンテキストで返す。
 
 ### 3.2 文脈取得
 
@@ -43,6 +44,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - AI 呼び出し時は現在メッセージに加えて、セッション内で未注入のチャンネルに限り直近 10 件の履歴を初期入力として渡す。
 - さらに過去履歴が必要な場合、AI は tool use（`read_message_history`）で都度取得する。
 - `read_message_history` は 1 回あたり最大 100 件（未指定時 30 件）を取得でき、複数回呼び出せる。
+- `read_message_history` は `beforeMessageId` / `afterMessageId` / `aroundMessageId` のいずれか1つを任意指定できる（同時指定不可）。
 
 ### 3.3 推論と制御
 
@@ -92,7 +94,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 2. 指定チャンネル内の投稿（メンション有無を問わない）を AI へ渡せる。
 3. 現在メッセージの `mentionedBot` 情報を AI 入力へ含められる。
 4. 履歴永続化なしで、未注入チャンネルのみ直近 10 件を初期文脈として渡せる。
-5. 必要時に `read_message_history` で追加履歴取得できる。
+5. 必要時に `read_message_history` で追加履歴取得できる（`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他）。
 6. AI 失敗時は返信せず終了し、失敗ログを確認できる。
 7. ワークスペース運用（`$LUNA_HOME/workspace`）で `LUNA.md` / `SOUL.md` を読み込める。
 8. `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を tool use で実行できる。`send_message` / `add_reaction` / `start_typing` は `channelId` または `userId`（DM）のどちらか一方で対象を指定でき、`send_message` は任意で返信先IDを指定できる。
@@ -103,3 +105,4 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 13. `cron.toml` の変更が再起動なしで反映される。不正設定時は前回有効スケジュールを維持する。
 14. Codex app-server が起動時に 1 回だけ起動し、Discord / heartbeat / cron prompt で共有される。
 15. Discord セッションは turn 完了後も再利用され、1 時間アイドルで閉じる。
+16. Discord MCP の各 tool はレスポンスをプレーンテキストで返す。

@@ -50,6 +50,8 @@ export type DiscordHistoryGateway = {
     userId: string;
   }) => Promise<DiscordGuildMemberDetail | null>;
   fetchMessages: (input: {
+    afterMessageId?: string;
+    aroundMessageId?: string;
     beforeMessageId?: string;
     channelId: string;
     limit: number;

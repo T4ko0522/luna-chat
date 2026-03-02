@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`discord-mcp-response-text > read_message_history のレスポンスを整形する 1`] = `
+"[2026-01-01 09:00:00 JST] Alice (ID: user-1) (Message ID: message-1):
+old
+
+[2026-01-01 09:01:00 JST] Bob (ID: user-2) (Message ID: message-2):
+new
+リアクション: 👍 x1 (自分済み)"
+`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > add_reaction 1`] = `"OK"`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > get_user_detail 1`] = `
+"表示名: Alice
+ユーザー名: alice
+ユーザーID: user-1
+Bot: false
+ニックネーム: なし
+グローバル名: Alice Global
+アバター: なし
+バナー: なし"
+`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > list_channels 1`] = `"- general (ID: channel-1, Guild: Guild Name (ID: guild-1))"`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > send_message 1`] = `"OK"`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > start_typing 1`] = `"OK"`;

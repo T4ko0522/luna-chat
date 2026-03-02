@@ -1,0 +1,93 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  formatAddReactionContent,
+  formatGetUserDetailContent,
+  formatListChannelsContent,
+  formatReadMessageHistoryContent,
+  formatSendMessageContent,
+  formatStartTypingContent,
+} from "./discord-mcp-response-text";
+
+describe("discord-mcp-response-text", () => {
+  it("read_message_history のレスポンスを整形する", () => {
+    const text = formatReadMessageHistoryContent({
+      channelId: "channel-1",
+      messages: [
+        {
+          authorName: "Alice (ID: user-1)",
+          content: "old",
+          createdAt: "2026-01-01 09:00:00 JST",
+          id: "message-1",
+        },
+        {
+          authorName: "Bob (ID: user-2)",
+          content: "new",
+          createdAt: "2026-01-01 09:01:00 JST",
+          id: "message-2",
+          reactions: [
+            {
+              count: 1,
+              emoji: "👍",
+              selfReacted: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(text).toMatchSnapshot();
+  });
+
+  it("他ツールのレスポンスを整形する", () => {
+    expect(
+      formatSendMessageContent({
+        channelId: "channel-1",
+        replyToMessageId: "reply-1",
+      }),
+    ).toMatchSnapshot("send_message");
+
+    expect(
+      formatAddReactionContent({
+        emoji: "👍",
+        messageId: "message-1",
+        userId: "user-1",
+      }),
+    ).toMatchSnapshot("add_reaction");
+
+    expect(
+      formatStartTypingContent({
+        alreadyRunning: false,
+        channelId: "channel-1",
+      }),
+    ).toMatchSnapshot("start_typing");
+
+    expect(
+      formatListChannelsContent({
+        channels: [
+          {
+            guildId: "guild-1",
+            guildName: "Guild Name",
+            id: "channel-1",
+            name: "general",
+          },
+        ],
+      }),
+    ).toMatchSnapshot("list_channels");
+
+    expect(
+      formatGetUserDetailContent({
+        user: {
+          avatar: null,
+          banner: null,
+          bot: false,
+          displayName: "Alice",
+          globalName: "Alice Global",
+          id: "user-1",
+          nickname: null,
+          username: "alice",
+        },
+      }),
+    ).toMatchSnapshot("get_user_detail");
+  });
+});

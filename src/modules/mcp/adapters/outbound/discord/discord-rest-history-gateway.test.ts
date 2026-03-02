@@ -145,4 +145,135 @@ describe("createDiscordRestHistoryGateway", () => {
 
     await expect(gateway.fetchUserById("user-1")).rejects.toThrow("boom");
   });
+
+  it.each([
+    {
+      cursor: {
+        beforeMessageId: "before-1",
+      },
+      expected: {
+        before: "before-1",
+      },
+      title: "beforeMessageId",
+    },
+    {
+      cursor: {
+        afterMessageId: "after-1",
+      },
+      expected: {
+        after: "after-1",
+      },
+      title: "afterMessageId",
+    },
+    {
+      cursor: {
+        aroundMessageId: "around-1",
+      },
+      expected: {
+        around: "around-1",
+      },
+      title: "aroundMessageId",
+    },
+  ])("fetchMessages は $title を Discord API 引数へ反映する", async ({ cursor, expected }) => {
+    const fetchMessages = vi.fn(async () => new Map<string, unknown>());
+    const gateway = createDiscordRestHistoryGateway({
+      channels: {
+        fetch: vi.fn(async () => createHistoryReadableChannel(fetchMessages)),
+      },
+      guilds: {
+        fetch: vi.fn(async () => null),
+      },
+      users: {
+        fetch: vi.fn(async () => null),
+      },
+    });
+
+    await gateway.fetchMessages({
+      channelId: "channel-1",
+      limit: 30,
+      ...cursor,
+    });
+
+    expect(fetchMessages).toHaveBeenCalledWith({
+      cache: false,
+      limit: 30,
+      ...expected,
+    });
+  });
+
+  it("fetchMessages は作成日時の降順で返す", async () => {
+    const fetchMessages = vi.fn(async () => {
+      return new Map<string, unknown>([
+        [
+          "old",
+          createRawMessage({
+            authorId: "user-1",
+            authorName: "Alice",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            createdTimestamp: 1,
+            id: "old",
+          }),
+        ],
+        [
+          "new",
+          createRawMessage({
+            authorId: "user-2",
+            authorName: "Bob",
+            createdAt: "2026-01-01T00:01:00.000Z",
+            createdTimestamp: 2,
+            id: "new",
+          }),
+        ],
+      ]);
+    });
+    const gateway = createDiscordRestHistoryGateway({
+      channels: {
+        fetch: vi.fn(async () => createHistoryReadableChannel(fetchMessages)),
+      },
+      guilds: {
+        fetch: vi.fn(async () => null),
+      },
+      users: {
+        fetch: vi.fn(async () => null),
+      },
+    });
+
+    await expect(
+      gateway.fetchMessages({
+        channelId: "channel-1",
+        limit: 30,
+      }),
+    ).resolves.toMatchObject([{ id: "new" }, { id: "old" }]);
+  });
 });
+
+function createHistoryReadableChannel(fetchMessages: (input: unknown) => Promise<unknown>) {
+  return {
+    isTextBased: () => true,
+    messages: {
+      fetch: fetchMessages,
+    },
+  };
+}
+
+function createRawMessage(input: {
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  createdTimestamp: number;
+  id: string;
+}) {
+  return {
+    attachments: new Map<string, unknown>(),
+    author: {
+      bot: false,
+      id: input.authorId,
+      username: input.authorName,
+    },
+    content: `${input.id} content`,
+    createdAt: new Date(input.createdAt),
+    createdTimestamp: input.createdTimestamp,
+    id: input.id,
+    reactions: new Map<string, unknown>(),
+  };
+}

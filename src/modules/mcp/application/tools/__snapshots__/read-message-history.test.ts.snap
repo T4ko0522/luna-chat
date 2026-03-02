@@ -9,7 +9,7 @@ exports[`readMessageHistory > 返却ペイロードのスナップショット 1
       "authorIsBot": false,
       "authorName": "Alice (ID: user-1)",
       "content": "古いメッセージ <attachments:att-1>",
-      "createdAt": "2026-01-01T00:00:00.000Z",
+      "createdAt": "2026-01-01 09:00:00 JST",
       "id": "m1",
     },
     {
@@ -17,7 +17,7 @@ exports[`readMessageHistory > 返却ペイロードのスナップショット 1
       "authorIsBot": true,
       "authorName": "ルナ (Bot) (ID: bot-1)",
       "content": "新しいメッセージ",
-      "createdAt": "2026-01-01T00:01:00.000Z",
+      "createdAt": "2026-01-01 09:01:00 JST",
       "id": "m2",
       "reactions": [
         {
