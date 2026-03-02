@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { appendAttachmentMarkers, WorkspaceDiscordAttachmentStore } from "./index";
+import { appendAttachmentMarkers } from "./domain/attachment-marker";
+
+import { WorkspaceDiscordAttachmentStore } from "./index";
 
 describe("appendAttachmentMarkers", () => {
   it("添付がない場合は本文をそのまま返す", () => {

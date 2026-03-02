@@ -9,6 +9,8 @@ import {
   loadWorkspaceCronConfig,
   removeWorkspaceCronJob,
   WORKSPACE_CRON_CONFIG_FILE_NAME,
+  type WorkspaceCronConfig,
+  WorkspaceCronConfigError,
   type WorkspaceCronJob,
 } from "./workspace-cron-config";
 
@@ -47,9 +49,7 @@ type CreateWatcher = (configPath: string) => WatcherLike;
 type LoadWorkspaceCronConfigFn = (
   configPath: string,
   timeZone: string | undefined,
-) => Promise<{
-  jobs: ReadonlyArray<WorkspaceCronJob>;
-}>;
+) => Promise<WorkspaceCronConfig>;
 type RemoveWorkspaceCronJobFn = (configPath: string, jobId: string) => Promise<boolean>;
 
 type StartCronPromptSchedulerInput = {
@@ -177,6 +177,10 @@ class CronPromptScheduler {
   private async reload(reason: "initial" | "watch"): Promise<void> {
     const loadedConfig = await this.loadWorkspaceCronConfig(this.configPath, this.timeZone).catch(
       (error: unknown) => {
+        if (error instanceof WorkspaceCronConfigError) {
+          this.logger.error("Failed to load cron prompts due to invalid cron.toml:", error);
+          return undefined;
+        }
         this.logger.error("Failed to load cron prompts. Keeping previous schedule:", error);
         return undefined;
       },

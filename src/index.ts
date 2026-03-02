@@ -24,7 +24,11 @@ import {
   type DiscordMcpServerHandle,
   startDiscordMcpServer,
 } from "./modules/mcp/inbound/discord-mcp-http-server";
-import { type RuntimeConfig, loadRuntimeConfig } from "./modules/runtime-config/runtime-config";
+import {
+  type RuntimeConfig,
+  RuntimeConfigError,
+  loadRuntimeConfig,
+} from "./modules/runtime-config/runtime-config";
 import { createTypingLifecycleRegistry } from "./modules/typing/typing-lifecycle-registry";
 import { closeFileLogging, initializeFileLogging, logger } from "./shared/logger";
 
@@ -148,6 +152,10 @@ async function loadConfigOrExit(): Promise<RuntimeConfig> {
   try {
     return await loadRuntimeConfig();
   } catch (error: unknown) {
+    if (error instanceof RuntimeConfigError) {
+      logger.error("Invalid configuration:", error.message);
+      process.exit(1);
+    }
     logger.error("Invalid configuration:", error);
     process.exit(1);
   }

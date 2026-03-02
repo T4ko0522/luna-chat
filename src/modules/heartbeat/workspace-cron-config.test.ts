@@ -6,85 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   loadWorkspaceCronConfig,
-  parseWorkspaceCronConfig,
   removeWorkspaceCronJob,
-  stringifyWorkspaceCronConfig,
-  type WorkspaceCronConfig,
   WorkspaceCronConfigError,
 } from "./workspace-cron-config";
-
-describe("parseWorkspaceCronConfig", () => {
-  it("jobs テーブルマップを読み込む", () => {
-    const config = parseWorkspaceCronConfig(
-      {
-        jobs: {
-          daily_check: {
-            cron: "0 0 9 * * *",
-            prompt: "daily",
-          },
-          oneshot_task: {
-            cron: "0 */15 * * * *",
-            oneshot: true,
-            prompt: "oneshot",
-          },
-        },
-      },
-      "UTC",
-    );
-
-    expect(config.jobs).toEqual([
-      {
-        cronTime: "0 0 9 * * *",
-        id: "daily_check",
-        oneshot: false,
-        prompt: "daily",
-      },
-      {
-        cronTime: "0 */15 * * * *",
-        id: "oneshot_task",
-        oneshot: true,
-        prompt: "oneshot",
-      },
-    ]);
-  });
-
-  it("jobs 未設定なら空配列として扱う", () => {
-    const config = parseWorkspaceCronConfig({}, undefined);
-    expect(config.jobs).toEqual([]);
-  });
-
-  it("cron が不正なら失敗する", () => {
-    expect(() => {
-      parseWorkspaceCronConfig(
-        {
-          jobs: {
-            invalid: {
-              cron: "not-a-cron",
-              prompt: "x",
-            },
-          },
-        },
-        "UTC",
-      );
-    }).toThrowError(WorkspaceCronConfigError);
-  });
-
-  it("timeZone が不正なら失敗する", () => {
-    expect(() => {
-      parseWorkspaceCronConfig(
-        {
-          jobs: {
-            valid: {
-              cron: "0 0 9 * * *",
-              prompt: "x",
-            },
-          },
-        },
-        "Mars/Phobos",
-      );
-    }).toThrowError(WorkspaceCronConfigError);
-  });
-});
 
 describe("loadWorkspaceCronConfig", () => {
   it("ファイルが存在しない場合は空設定を返す", async () => {
@@ -99,10 +23,7 @@ describe("loadWorkspaceCronConfig", () => {
     const configPath = createTempConfigPath();
     await writeFile(
       configPath,
-      `[jobs.daily]
-cron = "0 0 9 * * *"
-prompt = "daily"
-`,
+      `[jobs.daily]\ncron = "0 0 9 * * *"\nprompt = "daily"\n\n[jobs.oneshot]\ncron = "0 */15 * * * *"\nprompt = "oneshot"\noneshot = true\n`,
     );
 
     try {
@@ -114,7 +35,43 @@ prompt = "daily"
           oneshot: false,
           prompt: "daily",
         },
+        {
+          cronTime: "0 */15 * * * *",
+          id: "oneshot",
+          oneshot: true,
+          prompt: "oneshot",
+        },
       ]);
+    } finally {
+      await rm(configPath, {
+        force: true,
+      });
+    }
+  });
+
+  it("cron が不正なら失敗する", async () => {
+    const configPath = createTempConfigPath();
+    await writeFile(configPath, `[jobs.invalid]\ncron = "not-a-cron"\nprompt = "x"\n`);
+
+    try {
+      await expect(loadWorkspaceCronConfig(configPath, "UTC")).rejects.toThrowError(
+        WorkspaceCronConfigError,
+      );
+    } finally {
+      await rm(configPath, {
+        force: true,
+      });
+    }
+  });
+
+  it("timeZone が不正なら失敗する", async () => {
+    const configPath = createTempConfigPath();
+    await writeFile(configPath, `[jobs.valid]\ncron = "0 0 9 * * *"\nprompt = "x"\n`);
+
+    try {
+      await expect(loadWorkspaceCronConfig(configPath, "Mars/Phobos")).rejects.toThrowError(
+        WorkspaceCronConfigError,
+      );
     } finally {
       await rm(configPath, {
         force: true,
@@ -128,11 +85,7 @@ describe("removeWorkspaceCronJob", () => {
     const configPath = createTempConfigPath();
     await writeFile(
       configPath,
-      stringifyWorkspaceCronConfig(
-        createConfig(["a", "b"], {
-          b: true,
-        }),
-      ),
+      `[jobs.a]\ncron = "0 */5 * * * *"\nprompt = "prompt-a"\n\n[jobs.b]\ncron = "0 */5 * * * *"\nprompt = "prompt-b"\noneshot = true\n`,
     );
 
     try {
@@ -157,7 +110,7 @@ describe("removeWorkspaceCronJob", () => {
 
   it("存在しないジョブは削除しない", async () => {
     const configPath = createTempConfigPath();
-    await writeFile(configPath, stringifyWorkspaceCronConfig(createConfig(["a"])));
+    await writeFile(configPath, `[jobs.a]\ncron = "0 */5 * * * *"\nprompt = "prompt-a"\n`);
 
     try {
       const before = await readFile(configPath, "utf8");
@@ -178,20 +131,4 @@ function createTempConfigPath(): string {
   return resolve(
     join(tmpdir(), `luna-cron-config-${Date.now()}-${Math.random().toString(16)}.toml`),
   );
-}
-
-function createConfig(
-  ids: string[],
-  oneshotMap: Record<string, boolean> = {},
-): WorkspaceCronConfig {
-  return {
-    jobs: ids.map((id, index) => {
-      return {
-        cronTime: "0 */5 * * * *",
-        id,
-        oneshot: oneshotMap[id] ?? false,
-        prompt: `prompt-${String.fromCharCode(97 + index)}`,
-      };
-    }),
-  };
 }

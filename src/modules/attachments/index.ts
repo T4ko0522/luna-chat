@@ -1,5 +1,4 @@
 export { appendAttachmentsToContent } from "./application/append-attachments-to-content";
-export { appendAttachmentMarkers } from "./domain/attachment-marker";
 export type {
   DiscordAttachmentInput,
   DiscordAttachmentStore,

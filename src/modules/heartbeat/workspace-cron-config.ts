@@ -86,7 +86,7 @@ export async function removeWorkspaceCronJob(configPath: string, jobId: string):
   return true;
 }
 
-export function parseWorkspaceCronConfig(
+function parseWorkspaceCronConfig(
   rawConfig: unknown,
   timeZone: string | undefined,
 ): WorkspaceCronConfig {
@@ -100,7 +100,7 @@ export function parseWorkspaceCronConfig(
   return toWorkspaceCronConfig(parseResult.data, timeZone);
 }
 
-export function stringifyWorkspaceCronConfig(config: WorkspaceCronConfig): string {
+function stringifyWorkspaceCronConfig(config: WorkspaceCronConfig): string {
   const sortedJobs = [...config.jobs].sort((left, right) => {
     return left.id.localeCompare(right.id);
   });

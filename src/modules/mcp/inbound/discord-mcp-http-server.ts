@@ -1,7 +1,6 @@
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { serve, type ServerType } from "@hono/node-server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { REST, Routes } from "discord.js";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -10,10 +9,7 @@ import { appendAttachmentsToContent, type DiscordAttachmentStore } from "../../a
 import type { TypingLifecycleRegistry } from "../../typing/typing-lifecycle-registry";
 import { createTypingLifecycleRegistry } from "../../typing/typing-lifecycle-registry";
 import { createDiscordRestCommandGateway } from "../adapters/outbound/discord/discord-rest-command-gateway";
-import {
-  createDiscordRestHistoryGateway,
-  parseDiscordMessages,
-} from "../adapters/outbound/discord/discord-rest-history-gateway";
+import { createDiscordRestHistoryGateway } from "../adapters/outbound/discord/discord-rest-history-gateway";
 import { addReactionTool } from "../application/tools/add-reaction";
 import { getUserDetailTool } from "../application/tools/get-user-detail";
 import { listChannelsTool } from "../application/tools/list-channels";
@@ -24,9 +20,8 @@ import type { DiscordCommandTarget } from "../ports/outbound/discord-command-gat
 
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 100;
-const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_MCP_HOSTNAME = "127.0.0.1";
-export const DISCORD_MCP_PATH = "/mcp";
+const DISCORD_MCP_PATH = "/mcp";
 const TARGET_INPUT_ERROR_MESSAGE = "channelId と userId のどちらか一方のみ指定してください。";
 
 const fetchHistoryInputSchema = z.object({
@@ -102,19 +97,6 @@ export type DiscordMcpServerHandle = {
   close: () => Promise<void>;
   stopTypingByChannelId: (channelId: string) => void;
   url: string;
-};
-
-type StartTypingLoopInput = {
-  activeTypingLoops: Map<string, ReturnType<typeof setInterval>>;
-  channelId: string;
-  rest: Pick<REST, "post">;
-  setIntervalFn?: typeof setInterval;
-};
-
-type StopTypingLoopInput = {
-  activeTypingLoops: Map<string, ReturnType<typeof setInterval>>;
-  channelId: string;
-  clearIntervalFn?: typeof clearInterval;
 };
 
 type StartDiscordMcpServerOptions = {
@@ -394,123 +376,3 @@ async function stopServer(server: ServerType): Promise<void> {
     });
   });
 }
-
-export async function sendMessage(
-  rest: Pick<REST, "post">,
-  input: {
-    channelId: string;
-    replyToMessageId?: string;
-    text: string;
-  },
-): Promise<{ ok: true }> {
-  const trimmedText = input.text.trim();
-  if (!trimmedText) {
-    throw new Error("text must not be empty.");
-  }
-
-  const trimmedReplyToMessageId = input.replyToMessageId?.trim();
-  if (input.replyToMessageId !== undefined && !trimmedReplyToMessageId) {
-    throw new Error("replyToMessageId must not be empty.");
-  }
-
-  await rest.post(Routes.channelMessages(input.channelId), {
-    body: {
-      allowed_mentions: {
-        parse: [],
-        ...(trimmedReplyToMessageId ? { replied_user: true } : {}),
-      },
-      content: trimmedText,
-      ...(trimmedReplyToMessageId
-        ? {
-            message_reference: {
-              fail_if_not_exists: false,
-              message_id: trimmedReplyToMessageId,
-            },
-          }
-        : {}),
-    },
-  });
-
-  return {
-    ok: true,
-  };
-}
-
-export async function addMessageReaction(
-  rest: Pick<REST, "put">,
-  input: {
-    channelId: string;
-    emoji: string;
-    messageId: string;
-  },
-): Promise<{ ok: true }> {
-  const trimmedEmoji = input.emoji.trim();
-  if (!trimmedEmoji) {
-    throw new Error("emoji must not be empty.");
-  }
-
-  await rest.put(Routes.channelMessageOwnReaction(input.channelId, input.messageId, trimmedEmoji));
-  return {
-    ok: true,
-  };
-}
-
-export async function startTypingLoop(
-  input: StartTypingLoopInput,
-): Promise<{ alreadyRunning: boolean; ok: true }> {
-  if (input.activeTypingLoops.has(input.channelId)) {
-    return {
-      alreadyRunning: true,
-      ok: true,
-    };
-  }
-
-  await input.rest.post(Routes.channelTyping(input.channelId));
-
-  const setIntervalFn = input.setIntervalFn ?? setInterval;
-  const interval = setIntervalFn(() => {
-    void input.rest.post(Routes.channelTyping(input.channelId)).catch((error: unknown) => {
-      logger.warn("Failed to send typing indicator via MCP:", error);
-    });
-  }, TYPING_INTERVAL_MS);
-
-  input.activeTypingLoops.set(input.channelId, interval);
-  return {
-    alreadyRunning: false,
-    ok: true,
-  };
-}
-
-export function stopTypingLoop(input: StopTypingLoopInput): void {
-  const activeInterval = input.activeTypingLoops.get(input.channelId);
-  if (!activeInterval) {
-    return;
-  }
-
-  const clearIntervalFn = input.clearIntervalFn ?? clearInterval;
-  clearIntervalFn(activeInterval);
-  input.activeTypingLoops.delete(input.channelId);
-}
-
-export function stopAllTypingLoops(input: {
-  activeTypingLoops: Map<string, ReturnType<typeof setInterval>>;
-  clearIntervalFn?: typeof clearInterval;
-}): void {
-  for (const channelId of input.activeTypingLoops.keys()) {
-    if (input.clearIntervalFn) {
-      stopTypingLoop({
-        activeTypingLoops: input.activeTypingLoops,
-        channelId,
-        clearIntervalFn: input.clearIntervalFn,
-      });
-      continue;
-    }
-
-    stopTypingLoop({
-      activeTypingLoops: input.activeTypingLoops,
-      channelId,
-    });
-  }
-}
-
-export { parseDiscordMessages };
