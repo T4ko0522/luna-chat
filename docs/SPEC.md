@@ -33,7 +33,7 @@ luna-chat は、身内向け Discord サーバーで雑談に自然参加する 
 - `send_message` は `channelId` または `userId`（DM）のどちらか一方を受け取り、任意で `replyToMessageId` を指定できる。`replyToMessageId` 指定時は該当メッセージへの返信として投稿する。
 - `add_reaction` は `channelId` または `userId`（DM）のどちらか一方と `messageId` / `emoji` を受け取る。
 - `start_typing` は `channelId` または `userId`（DM）のどちらか一方を受け取る。
-- `start_typing` で開始した入力中表示は Discord turn 完了時に自動停止する。
+- `start_typing` で開始した入力中表示は Discord turn 完了時、または `send_message` 成功時に自動停止する。
 - `list_channels` は `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids` に含まれるチャンネル情報のみを返し、各チャンネルに `guildId` と `guildName` を含める（チャンネル種別の数値は返さない）。
 - `get_user_detail` は `userId` と `channelId` を受け取り、`user` として基本ユーザー情報に `displayName` / `nickname` を加えた単一オブジェクトを返す（対象ユーザーが取得できない場合は `user=null`）。
 - Discord MCP の tool レスポンスは JSON 文字列ではなくプレーンテキストで返す。

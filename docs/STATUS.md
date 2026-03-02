@@ -23,7 +23,7 @@
 - `send_message` の返信投稿は `fail_if_not_exists=false` で送信し、返信先が見つからない場合も通常投稿として継続する。
 - `send_message` の返信投稿では `allowed_mentions.replied_user=true` として返信先ユーザーへ通知する。
 - AI は必要時に MCP tool `start_typing` で入力中表示を開始できる（8 秒間隔）。
-- `start_typing` で開始した入力中表示は、Discord turn 完了時に自動停止する。
+- `start_typing` で開始した入力中表示は、`send_message` 成功時または Discord turn 完了時に自動停止する。
 - AI は必要時に MCP tool `list_channels` で `[discord].allowed_channel_ids` に含まれるチャンネル一覧を取得できる。
 - AI は必要時に MCP tool `get_user_detail` で `userId` と `channelId` から `user`（基本ユーザー情報 + `displayName` / `nickname`）を取得できる。
 - AI turn の開始/終了は `info` ログへ出力し、終了時には `thread/tokenUsage/updated` 由来のトークン使用量（`last`/`total` 内訳）を含める。
@@ -39,7 +39,7 @@
 - `ai` の turn 結果型は `src/modules/ai/domain/turn-result.ts`、サービス契約は `src/modules/ai/ports/inbound/ai-service-port.ts` を正本としている。
 - 旧実装（`src/ai` の非生成コード、`src/context/*`、`src/policy/*`）は削除し、生成型は `src/modules/ai/codex-generated/*` へ移設済み。
 - typing 管理は `typing-lifecycle-registry` で一元化している。
-- メンション起点の typing は message handler の `finally` で停止し、tool 起点の typing は Discord turn 完了時コールバックで停止する。
+- メンション起点の typing は message handler の `finally` で停止し、tool 起点の typing は `send_message` 成功時または Discord turn 完了時コールバックで停止する。
 - AI 呼び出し失敗時はフォールバック返信せず、ログ記録のみで終了する。
 - 設定は `DISCORD_BOT_TOKEN` を必須とし、`LUNA_HOME` 未設定時は `~/.luna` を使う。
 - 許可チャンネルは `$LUNA_HOME/config.toml` の `[discord].allowed_channel_ids`（文字列配列）から読み込む。

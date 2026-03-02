@@ -1,3 +1,4 @@
+import type { TypingLifecycleRegistry } from "../../../typing/typing-lifecycle-registry";
 import type {
   DiscordCommandGateway,
   DiscordCommandTarget,
@@ -8,11 +9,14 @@ export async function sendMessageTool(input: {
   replyToMessageId?: string;
   target: DiscordCommandTarget;
   text: string;
+  typingRegistry: TypingLifecycleRegistry;
 }): Promise<{ ok: true }> {
   const channelId = await input.gateway.resolveChannelId(input.target);
-  return await input.gateway.sendMessage({
+  const payload = await input.gateway.sendMessage({
     channelId,
     text: input.text,
     ...(input.replyToMessageId === undefined ? {} : { replyToMessageId: input.replyToMessageId }),
   });
+  input.typingRegistry.stopByChannelId(channelId);
+  return payload;
 }

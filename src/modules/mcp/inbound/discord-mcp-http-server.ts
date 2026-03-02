@@ -198,6 +198,7 @@ export async function startDiscordMcpServer(
           userId,
         }),
         text,
+        typingRegistry,
         ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
       });
 

@@ -14,7 +14,7 @@
 5. 会話ログ本文は永続保存しない。
 6. AI 入力には現在メッセージを必ず含め、セッションキー内で未注入の履歴スコープの場合のみ直近 10 件を追加する（通常チャンネル投稿は `channelId` 単位、DM 投稿は `userId` 単位）。
 7. 追加履歴は `read_message_history` で都度取得できる（`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他指定）。
-8. AI は必要時に `start_typing` で入力中表示を開始でき、Discord turn 完了時に自動停止される。
+8. AI は必要時に `start_typing` で入力中表示を開始でき、`send_message` 成功時または Discord turn 完了時に自動停止される。
 9. Bot 直接メンション時の自動 typing 送信も継続する。
 10. ワークスペース（`$LUNA_HOME/workspace`）のドキュメントを AI instructions に読み込む。
 11. 自己改善ドキュメントの自動更新フローは現時点で未実装。
