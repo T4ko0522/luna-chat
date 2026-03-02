@@ -312,4 +312,70 @@ describe("turn-result-collector", () => {
 
     expect(turnResult.status).toBe("completed");
   });
+
+  it("delta と error も thread/turn が不一致なら無視する", async () => {
+    const tracker = createTurnTracker({ threadId: "thread-1" });
+    bindTrackerToTurn(tracker, "turn-1");
+
+    handleTurnNotification(
+      {
+        method: "item/agentMessage/delta",
+        params: {
+          delta: "ignored",
+          threadId: "thread-2",
+          turnId: "turn-1",
+        },
+      },
+      tracker,
+    );
+
+    handleTurnNotification(
+      {
+        method: "error",
+        params: {
+          error: {
+            message: "ignored error",
+          },
+          threadId: "thread-2",
+          turnId: "turn-1",
+        },
+      },
+      tracker,
+    );
+
+    handleTurnNotification(
+      {
+        method: "item/agentMessage/delta",
+        params: {
+          delta: "accepted",
+          threadId: "thread-1",
+          turnId: "turn-1",
+        },
+      },
+      tracker,
+    );
+
+    handleTurnNotification(
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: {
+            id: "turn-1",
+            status: "completed",
+          },
+        },
+      },
+      tracker,
+    );
+
+    const turnResult = await waitForTurnCompletion({
+      onTimeout: async () => undefined,
+      timeoutMs: 100,
+      tracker,
+    });
+
+    expect(turnResult.assistantText).toBe("accepted");
+    expect(turnResult.errorMessage).toBeUndefined();
+  });
 });

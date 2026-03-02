@@ -209,7 +209,7 @@ describe("createJsonRpcClient", () => {
 });
 
 class FakeStdioProcessHandle implements StdioProcessHandle {
-  readonly close = vi.fn();
+  readonly close = vi.fn(async () => undefined);
   readonly writeMessages: object[] = [];
 
   private readonly errorHandlers: Array<(error: Error) => void> = [];

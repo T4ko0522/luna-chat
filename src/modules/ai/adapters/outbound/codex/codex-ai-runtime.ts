@@ -27,7 +27,6 @@ type CodexAiRuntimeOptions = StdioProcessOptions & {
   approvalPolicy: string;
   model: string;
   sandbox: string;
-  timeoutMs: number;
 };
 
 export class CodexAiRuntime {
@@ -75,7 +74,14 @@ export class CodexAiRuntime {
     return extractThreadId(result);
   }
 
-  async startTurn(threadId: string, prompt: string, observer?: TurnObserver): Promise<StartedTurn> {
+  async startTurn(
+    threadId: string,
+    prompt: string,
+    observer: TurnObserver | undefined,
+    options: {
+      timeoutMs: number;
+    },
+  ): Promise<StartedTurn> {
     const tracker = createTurnTracker({ threadId });
     const unbind = this.rpcClient.onNotification((notification) => {
       handleTurnNotification(notification, tracker, observer);
@@ -94,7 +100,7 @@ export class CodexAiRuntime {
         onTimeout: async () => {
           await this.interruptTurn(threadId, turnId);
         },
-        timeoutMs: this.options.timeoutMs,
+        timeoutMs: options.timeoutMs,
         tracker,
       }).finally(() => {
         unbind();
@@ -120,11 +126,11 @@ export class CodexAiRuntime {
     await this.rpcClient.request("turn/steer", params);
   }
 
-  close(): void {
-    this.rpcClient.close();
+  async close(): Promise<void> {
+    await this.rpcClient.close();
   }
 
-  private async interruptTurn(threadId: string, turnId: string): Promise<void> {
+  async interruptTurn(threadId: string, turnId: string): Promise<void> {
     const interruptRequest = this.rpcClient
       .request("turn/interrupt", { threadId, turnId })
       .catch(() => undefined);

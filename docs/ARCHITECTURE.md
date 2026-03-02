@@ -52,16 +52,19 @@
   - `messageCreate` ハンドリング
   - 返信判定（非スレッド・DMは`allow_dm`に従う・Guildは許可チャンネル）
   - `RuntimeMessage` 整形（返信先・添付マーカー・リアクション含む）
-  - 初期履歴10件取得と AI 呼び出し
+  - 初期履歴10件の遅延取得関数を AI へ渡す
 - `src/modules/conversation/domain/runtime-message.ts`
   - `RuntimeMessage` / `RuntimeReplyMessage` / `RuntimeReaction` 型
 
 ### 4.4 AI
 
 - `src/modules/ai/application/channel-session-coordinator.ts`
-  - チャンネル単位セッション管理
+  - app-server 共有ランタイム管理（Discord / heartbeat / cron prompt）
+  - Discord セッション再利用（thread 継続）
+  - セッション単位の注入済みチャンネル管理（未注入チャンネルのみ初期履歴を注入）
+  - Discord セッションの 1 時間アイドル TTL 管理（turn 実行中は完了後クローズ）
   - `turn/steer` 優先、失敗時 `turn/start` フォールバック
-  - turn完了後の session 破棄とコールバック実行
+  - turn完了時の channel 単位コールバック実行
 - `src/modules/ai/application/prompt-composer.ts`
   - `instructions` / `developerRolePrompt` / `userRolePrompt` 生成
   - `LUNA.md` / `SOUL.md` 連結
@@ -162,16 +165,16 @@
 3. 返信判定（スレッド除外、DMは`allow_dm`で判定、Guildは許可外チャンネルを除外）を行う。
 4. 現在メッセージを `RuntimeMessage` に変換する（添付・返信先・リアクション含む）。
 5. `mentionedBot=true` の場合のみ typing を開始する（source=`message:<id>`）。
-6. 直近履歴10件を取得し、昇順整形して AI へ渡す。
+6. 未注入チャンネルの場合のみ直近履歴10件を遅延取得し、昇順整形して AI へ渡す。
 7. AI は必要に応じて MCP tools を実行する。
 8. ハンドラ `finally` でメンション起点 typing を停止する。
-9. turn 完了時コールバックで channel 単位の typing を停止し、session を破棄する。
+9. turn 完了時コールバックで channel 単位の typing を停止する。Discord セッションは継続し、1時間アイドル時に破棄する。
 
 ### 6.2 同一チャンネル連投
 
-1. チャンネル単位で active session を保持する。
+1. Discord 全体で 1 つの active session を保持する。
 2. 進行中 turn があれば `turn/steer` を試行する。
-3. `turn/steer` が失敗した場合は同一threadで `turn/start` を再実行する。
+3. `turn/steer` が失敗した場合は `turn/interrupt` 後に同一threadで `turn/start` を再実行する。
 
 ### 6.3 履歴追加取得（tool use）
 

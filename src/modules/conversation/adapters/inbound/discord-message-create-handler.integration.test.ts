@@ -139,7 +139,7 @@ describe("handleMessageCreate integration", () => {
       reply,
       sendTyping,
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 
@@ -155,8 +155,13 @@ describe("handleMessageCreate integration", () => {
 
     expect(generateReply).toHaveBeenCalledTimes(1);
     expect(sendTyping).not.toHaveBeenCalled();
-    expect(fetchHistory).toHaveBeenCalledWith({ before: "message", limit: 10 });
-    expect(generateReply).toHaveBeenCalledWith({
+    const aiInput = generateReply.mock.calls[0]?.[0];
+    if (!aiInput) {
+      throw new Error("generateReply was not called.");
+    }
+
+    expect(fetchHistory).not.toHaveBeenCalled();
+    expect(aiInput).toEqual({
       channelName: "general",
       currentMessage: {
         authorId: "author",
@@ -168,29 +173,31 @@ describe("handleMessageCreate integration", () => {
         id: "message",
         mentionedBot: false,
       },
-      recentMessages: [
-        {
-          authorId: "author",
-          authorIsBot: false,
-          authorName: "display",
-          channelId: "channel",
-          content: "history",
-          createdAt: "2026-01-01 08:59:00 JST",
-          id: "old",
-          mentionedBot: false,
-        },
-        {
-          authorId: "author",
-          authorIsBot: false,
-          authorName: "display",
-          channelId: "channel",
-          content: "history",
-          createdAt: "2026-01-01 08:59:30 JST",
-          id: "new",
-          mentionedBot: false,
-        },
-      ],
+      loadRecentMessages: expect.any(Function),
     });
+    await expect(aiInput.loadRecentMessages()).resolves.toEqual([
+      {
+        authorId: "author",
+        authorIsBot: false,
+        authorName: "display",
+        channelId: "channel",
+        content: "history",
+        createdAt: "2026-01-01 08:59:00 JST",
+        id: "old",
+        mentionedBot: false,
+      },
+      {
+        authorId: "author",
+        authorIsBot: false,
+        authorName: "display",
+        channelId: "channel",
+        content: "history",
+        createdAt: "2026-01-01 08:59:30 JST",
+        id: "new",
+        mentionedBot: false,
+      },
+    ]);
+    expect(fetchHistory).toHaveBeenCalledWith({ before: "message", limit: 10 });
     expect(reply).not.toHaveBeenCalled();
   });
 
@@ -303,7 +310,7 @@ describe("handleMessageCreate integration", () => {
     const message = createMessage({
       referenceMessage: referencedMessage,
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 
@@ -350,7 +357,7 @@ describe("handleMessageCreate integration", () => {
       return new Collection<string, HistoryMessageLike>([["history-reply", historyReply]]);
     });
     const message = createMessage({ fetchHistory });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 
@@ -364,23 +371,23 @@ describe("handleMessageCreate integration", () => {
       message,
     });
 
-    expect(generateReply).toHaveBeenCalledWith(
+    const aiInput = generateReply.mock.calls[0]?.[0];
+    if (!aiInput) {
+      throw new Error("generateReply was not called.");
+    }
+    await expect(aiInput.loadRecentMessages()).resolves.toEqual([
       expect.objectContaining({
-        recentMessages: [
-          expect.objectContaining({
-            id: "history-reply",
-            replyTo: {
-              authorId: "history-reply-target-author-id",
-              authorIsBot: false,
-              authorName: "history-reply-target-display",
-              content: "history reply target",
-              createdAt: "2026-01-01 08:57:00 JST",
-              id: "history-reply-target-id",
-            },
-          }),
-        ],
+        id: "history-reply",
+        replyTo: {
+          authorId: "history-reply-target-author-id",
+          authorIsBot: false,
+          authorName: "history-reply-target-display",
+          content: "history reply target",
+          createdAt: "2026-01-01 08:57:00 JST",
+          id: "history-reply-target-id",
+        },
       }),
-    );
+    ]);
   });
 
   it("返信先取得に失敗しても処理を継続する", async () => {
@@ -391,7 +398,7 @@ describe("handleMessageCreate integration", () => {
       fetchReference,
       referenceMessageId: "reply-target-id",
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const logger = createLogger();
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
@@ -425,7 +432,7 @@ describe("handleMessageCreate integration", () => {
     const reply = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
     const message = createMessage({ channelId: "other", reply, sendTyping });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 
@@ -452,7 +459,7 @@ describe("handleMessageCreate integration", () => {
       channelName: null,
       fetchHistory,
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const logger = createLogger();
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
@@ -467,12 +474,12 @@ describe("handleMessageCreate integration", () => {
       message,
     });
 
-    expect(generateReply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        channelName: "unknown",
-        recentMessages: [],
-      }),
-    );
+    const aiInput = generateReply.mock.calls[0]?.[0];
+    if (!aiInput) {
+      throw new Error("generateReply was not called.");
+    }
+    expect(aiInput.channelName).toBe("unknown");
+    await expect(aiInput.loadRecentMessages()).resolves.toEqual([]);
     expect(logger.warn).toHaveBeenCalled();
   });
 
@@ -547,7 +554,7 @@ describe("handleMessageCreate integration", () => {
       throw new Error("typing failed");
     });
     const message = createMessage({ mentionBot: true, sendTyping });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const logger = createLogger();
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
@@ -581,7 +588,7 @@ describe("handleMessageCreate integration", () => {
         },
       ],
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore({
       pathsById: {
@@ -619,7 +626,7 @@ describe("handleMessageCreate integration", () => {
         },
       ],
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const logger = createLogger();
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore({
@@ -672,7 +679,7 @@ describe("handleMessageCreate integration", () => {
         ],
       }),
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 
@@ -718,7 +725,7 @@ describe("handleMessageCreate integration", () => {
     const message = createMessage({
       reactions: [],
     });
-    const generateReply = vi.fn(async () => undefined);
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
     const aiService = createAiService(generateReply);
     const attachmentStore = createAttachmentStore();
 

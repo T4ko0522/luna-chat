@@ -106,9 +106,14 @@ export function handleTurnNotification(
 ): void {
   if (notification.method === "item/agentMessage/delta") {
     const params = parseAgentMessageDeltaParams(notification.params);
-    if (params) {
-      tracker.deltaText += params.delta;
+    if (!params) {
+      return;
     }
+    if (!shouldHandleTurnScopedEvent(tracker, params.threadId, params.turnId)) {
+      return;
+    }
+
+    tracker.deltaText += params.delta;
     return;
   }
 
@@ -180,9 +185,14 @@ export function handleTurnNotification(
 
   if (notification.method === "error") {
     const params = parseErrorParams(notification.params);
-    if (params) {
-      tracker.errorMessage = params.errorMessage;
+    if (!params) {
+      return;
     }
+    if (!shouldHandleTurnScopedEvent(tracker, params.threadId, params.turnId)) {
+      return;
+    }
+
+    tracker.errorMessage = params.errorMessage;
     return;
   }
 
@@ -247,7 +257,13 @@ export async function waitForTurnCompletion(input: {
   };
 }
 
-function parseAgentMessageDeltaParams(params: unknown): { delta: string } | undefined {
+function parseAgentMessageDeltaParams(params: unknown):
+  | {
+      delta: string;
+      threadId?: string;
+      turnId?: string;
+    }
+  | undefined {
   if (!isRecord(params)) {
     return undefined;
   }
@@ -255,9 +271,13 @@ function parseAgentMessageDeltaParams(params: unknown): { delta: string } | unde
   if (typeof delta !== "string") {
     return undefined;
   }
+  const threadId = getStringValue(params, ["threadId", "thread_id"]);
+  const turnId = getStringValue(params, ["turnId", "turn_id"]);
 
   return {
     delta,
+    ...(threadId ? { threadId } : {}),
+    ...(turnId ? { turnId } : {}),
   };
 }
 
@@ -467,7 +487,13 @@ function parseTokenUsageBreakdown(value: unknown): TokenUsageBreakdown | undefin
   };
 }
 
-function parseErrorParams(params: unknown): { errorMessage: string } | undefined {
+function parseErrorParams(params: unknown):
+  | {
+      errorMessage: string;
+      threadId?: string;
+      turnId?: string;
+    }
+  | undefined {
   if (!isRecord(params)) {
     return undefined;
   }
@@ -481,9 +507,13 @@ function parseErrorParams(params: unknown): { errorMessage: string } | undefined
   if (typeof message !== "string") {
     return undefined;
   }
+  const threadId = getStringValue(params, ["threadId", "thread_id"]);
+  const turnId = getStringValue(params, ["turnId", "turn_id"]);
 
   return {
     errorMessage: message,
+    ...(threadId ? { threadId } : {}),
+    ...(turnId ? { turnId } : {}),
   };
 }
 

@@ -26,13 +26,21 @@ export type StartedTurn = {
 };
 
 export interface AiRuntimePort {
-  close(): void;
+  close(): Promise<void>;
+  interruptTurn(threadId: string, turnId: string): Promise<void>;
   initialize(): Promise<void>;
   startThread(input: {
     instructions: string;
     developerRolePrompt: string;
     config?: Record<string, unknown>;
   }): Promise<string>;
-  startTurn(threadId: string, prompt: string, observer?: TurnObserver): Promise<StartedTurn>;
+  startTurn(
+    threadId: string,
+    prompt: string,
+    observer: TurnObserver | undefined,
+    options: {
+      timeoutMs: number;
+    },
+  ): Promise<StartedTurn>;
   steerTurn(threadId: string, expectedTurnId: string, prompt: string): Promise<void>;
 }

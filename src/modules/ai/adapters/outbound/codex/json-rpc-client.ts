@@ -52,7 +52,7 @@ type SupportedClientRequestParams<M extends SupportedClientRequestMethod> = Extr
 >["params"];
 
 type JsonRpcClient = {
-  close: () => void;
+  close: () => Promise<void>;
   notifyInitialized: () => void;
   onNotification: (handler: (notification: JsonRpcNotificationMessage) => void) => () => void;
   request: <M extends SupportedClientRequestMethod>(
@@ -91,12 +91,12 @@ export function createJsonRpcClient(processHandle: StdioProcessHandle): JsonRpcC
   });
 
   return {
-    close: () => {
+    close: async () => {
       if (closed) {
         return;
       }
       closed = true;
-      processHandle.close();
+      await processHandle.close();
     },
     notifyInitialized: () => {
       const notification: ClientNotification = {

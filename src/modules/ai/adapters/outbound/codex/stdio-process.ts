@@ -8,7 +8,7 @@ export type StdioProcessOptions = {
 };
 
 export type StdioProcessHandle = {
-  close: () => void;
+  close: () => Promise<void>;
   onError: (handler: (error: Error) => void) => void;
   onExit: (handler: () => void) => void;
   onLine: (handler: (line: string) => void) => void;
@@ -29,6 +29,8 @@ export function startStdioProcess(options: StdioProcessOptions): StdioProcessHan
   const lineReader = readline.createInterface({
     input: child.stdout,
   });
+  // Drain stderr to avoid deadlocks when app-server writes large logs.
+  child.stderr.on("data", () => undefined);
 
   return createHandle(child, lineReader);
 }
@@ -37,15 +39,30 @@ function createHandle(
   child: ChildProcessWithoutNullStreams,
   lineReader: readline.Interface,
 ): StdioProcessHandle {
+  const waitForExit = (): Promise<void> => {
+    return new Promise((resolve) => {
+      child.once("exit", () => {
+        resolve();
+      });
+    });
+  };
+
   return {
-    close: () => {
+    close: async () => {
       lineReader.close();
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return;
+      }
+
+      const exitPromise = waitForExit();
       child.kill("SIGTERM");
-      setTimeout(() => {
-        if (!child.killed) {
-          child.kill("SIGKILL");
-        }
-      }, 1_000);
+      const exitedAfterTerm = await Promise.race([exitPromise.then(() => true), wait(1_000)]);
+      if (exitedAfterTerm) {
+        return;
+      }
+
+      child.kill("SIGKILL");
+      await Promise.race([exitPromise, wait(1_000)]);
     },
     onError: (handler) => {
       child.on("error", handler);
@@ -60,4 +77,12 @@ function createHandle(
       child.stdin.write(`${JSON.stringify(message)}\n`);
     },
   };
+}
+
+async function wait(ms: number): Promise<false> {
+  return await new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(false);
+    }, ms);
+  });
 }

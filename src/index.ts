@@ -57,21 +57,19 @@ const discordMcpServer = await startDiscordMcpServerOrExit(
   typingLifecycleRegistry,
 );
 
-const createRuntime = (timeoutMs: number) => {
-  return new CodexAiRuntime({
-    approvalPolicy: CODEX_APP_SERVER_APPROVAL_POLICY,
-    codexHomeDir: runtimeConfig.codexHomeDir,
-    command: CODEX_APP_SERVER_COMMAND,
-    cwd: runtimeConfig.codexWorkspaceDir,
-    model: runtimeConfig.aiModel,
-    sandbox: CODEX_APP_SERVER_SANDBOX,
-    timeoutMs,
-  });
-};
-
-const discordAiService: ReplyGenerator = new ChannelSessionCoordinator({
-  createRuntime: () => createRuntime(CODEX_APP_SERVER_TIMEOUT_MS_FOR_DISCORD),
+const aiService = new ChannelSessionCoordinator({
+  createRuntime: () =>
+    new CodexAiRuntime({
+      approvalPolicy: CODEX_APP_SERVER_APPROVAL_POLICY,
+      codexHomeDir: runtimeConfig.codexHomeDir,
+      command: CODEX_APP_SERVER_COMMAND,
+      cwd: runtimeConfig.codexWorkspaceDir,
+      model: runtimeConfig.aiModel,
+      sandbox: CODEX_APP_SERVER_SANDBOX,
+    }),
+  discordTurnTimeoutMs: CODEX_APP_SERVER_TIMEOUT_MS_FOR_DISCORD,
   discordMcpServerUrl: discordMcpServer.url,
+  heartbeatTurnTimeoutMs: CODEX_APP_SERVER_TIMEOUT_MS_FOR_HEARTBEAT,
   onDiscordTurnCompleted: (channelId) => {
     typingLifecycleRegistry.stopByChannelId(channelId);
   },
@@ -79,22 +77,24 @@ const discordAiService: ReplyGenerator = new ChannelSessionCoordinator({
   workspaceDir: runtimeConfig.codexWorkspaceDir,
 });
 
-const heartbeatAiService = new ChannelSessionCoordinator({
-  createRuntime: () => createRuntime(CODEX_APP_SERVER_TIMEOUT_MS_FOR_HEARTBEAT),
-  discordMcpServerUrl: discordMcpServer.url,
-  reasoningEffort: runtimeConfig.aiReasoningEffort,
-  workspaceDir: runtimeConfig.codexWorkspaceDir,
+await aiService.initializeRuntime().catch(async (error: unknown) => {
+  logger.error("Failed to initialize Codex app-server runtime:", error);
+  await closeDiscordMcpServer(discordMcpServer);
+  await closeFileLogging();
+  process.exit(1);
 });
 
+const discordAiService: ReplyGenerator = aiService;
+
 const heartbeatRunner = startHeartbeatRunner({
-  aiService: heartbeatAiService,
+  aiService,
   cronTime: runtimeConfig.heartbeatCronTime,
   logger,
   prompt: HEARTBEAT_PROMPT,
   ...(runtimeConfig.timeZone === undefined ? {} : { timeZone: runtimeConfig.timeZone }),
 });
 const cronPromptScheduler = await startCronPromptScheduler({
-  aiService: heartbeatAiService,
+  aiService,
   logger,
   ...(runtimeConfig.timeZone === undefined ? {} : { timeZone: runtimeConfig.timeZone }),
   workspaceDir: runtimeConfig.codexWorkspaceDir,
@@ -105,6 +105,7 @@ registerShutdownHooks({
   cronPromptScheduler,
   discordMcpServer,
   heartbeatRunner,
+  aiService,
   typingLifecycleRegistry,
 });
 
@@ -137,6 +138,7 @@ await client.login(runtimeConfig.discordBotToken).catch(async (error: unknown) =
   await cronPromptScheduler.stop();
   heartbeatRunner.stop();
   await closeDiscordMcpServer(discordMcpServer);
+  await aiService.close();
   await closeFileLogging();
   process.exit(1);
 });
@@ -199,6 +201,7 @@ function registerShutdownHooks(input: {
   cronPromptScheduler: CronPromptSchedulerHandle;
   discordMcpServer: DiscordMcpServerHandle;
   heartbeatRunner: HeartbeatRunnerHandle;
+  aiService: ChannelSessionCoordinator;
   typingLifecycleRegistry: ReturnType<typeof createTypingLifecycleRegistry>;
 }): void {
   let shuttingDown = false;
@@ -215,6 +218,7 @@ function registerShutdownHooks(input: {
     input.typingLifecycleRegistry.stopAll();
     await input.client.destroy();
     await closeDiscordMcpServer(input.discordMcpServer);
+    await input.aiService.close();
     await closeFileLogging();
     process.exit(0);
   };

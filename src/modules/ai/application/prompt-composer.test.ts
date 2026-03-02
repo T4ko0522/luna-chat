@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { AiInput } from "../ports/inbound/ai-service-port";
+import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
 
 import { buildHeartbeatPromptBundle, buildPromptBundle, buildSteerPrompt } from "./prompt-composer";
 
@@ -20,6 +20,8 @@ describe("buildPromptBundle", () => {
 
       expect(promptBundle.userRolePrompt).toContain("テスト本文");
       expect(promptBundle.userRolePrompt).not.toContain("forceReply");
+      expect(promptBundle.userRolePrompt).toContain("新しいDiscordの投稿です。");
+      expect(promptBundle.userRolePrompt).not.toContain("以下は現在の入力情報です。");
 
       const recentMessagesIndex = promptBundle.userRolePrompt.indexOf("## 直近のメッセージ");
       const currentMessageIndex = promptBundle.userRolePrompt.indexOf("## 投稿されたメッセージ");
@@ -223,6 +225,20 @@ describe("buildPromptBundle", () => {
     });
   });
 
+  it("直近メッセージが0件の場合は直近メッセージセクションを出力しない", async () => {
+    await withWorkspaceDir(async (workspaceDir) => {
+      const input = createInput();
+      input.recentMessages = [];
+
+      const promptBundle = await buildPromptBundle(input, workspaceDir);
+
+      expect(promptBundle.userRolePrompt).not.toContain("## 直近のメッセージ");
+      expect(promptBundle.userRolePrompt).not.toContain("(none)");
+      expect(promptBundle.userRolePrompt).toContain("## 投稿されたメッセージ");
+      expect(promptBundle.userRolePrompt).toMatchSnapshot();
+    });
+  });
+
   it("RUNBOOK 由来の文字列を含めない", async () => {
     await withWorkspaceDir(async (workspaceDir) => {
       const promptBundle = await buildPromptBundle(createInput(), workspaceDir);
@@ -301,16 +317,21 @@ describe("buildHeartbeatPromptBundle", () => {
 
 describe("buildSteerPrompt", () => {
   it("追加メッセージ見出し付きでメッセージ本文を生成する", () => {
-    const steerPrompt = buildSteerPrompt(createInput().currentMessage);
+    const input = createInput();
+    const steerPrompt = buildSteerPrompt({
+      channelName: input.channelName,
+      message: input.currentMessage,
+    });
 
     expect(steerPrompt).toMatch(
-      /^## 追加メッセージ\n\n\[2026-02-23 09:00:00 JST\] author-name \(ID: author-id\) \(Message ID: message-id\):\nテスト本文$/,
+      /^新しいDiscordの投稿です。\nチャンネル名: channel-name \(ID: channel-id\)\n\n## 投稿されたメッセージ\n\n\[2026-02-23 09:00:00 JST\] author-name \(ID: author-id\) \(Message ID: message-id\):\nテスト本文$/,
     );
     expect(steerPrompt).toMatchSnapshot();
   });
 
   it("返信先がある場合は引用形式を含める", () => {
-    const message = createInput().currentMessage;
+    const input = createInput();
+    const message = input.currentMessage;
     message.replyTo = {
       authorId: "reply-author-id",
       authorIsBot: false,
@@ -320,9 +341,12 @@ describe("buildSteerPrompt", () => {
       id: "reply-message-id",
     };
 
-    const steerPrompt = buildSteerPrompt(message);
+    const steerPrompt = buildSteerPrompt({
+      channelName: input.channelName,
+      message,
+    });
 
-    expect(steerPrompt).toContain("## 追加メッセージ");
+    expect(steerPrompt).toContain("## 投稿されたメッセージ");
     expect(steerPrompt).toContain(
       "> [2026-02-23 08:58:00 JST] reply-author-name (ID: reply-author-id) (Message ID: reply-message-id):",
     );
@@ -332,7 +356,8 @@ describe("buildSteerPrompt", () => {
   });
 
   it("リアクションがある場合は steer prompt にも表示する", () => {
-    const message = createInput().currentMessage;
+    const input = createInput();
+    const message = input.currentMessage;
     message.reactions = [
       {
         count: 3,
@@ -345,14 +370,34 @@ describe("buildSteerPrompt", () => {
       },
     ];
 
-    const steerPrompt = buildSteerPrompt(message);
+    const steerPrompt = buildSteerPrompt({
+      channelName: input.channelName,
+      message,
+    });
 
     expect(steerPrompt).toContain("リアクション: 👍 x3 (自分済み), 🎉 x1");
     expect(steerPrompt).toMatchSnapshot();
   });
+
+  it("未注入チャンネルの場合は初期履歴セクションを追加する", () => {
+    const input = createInput();
+    const steerPrompt = buildSteerPrompt({
+      channelName: input.channelName,
+      message: input.currentMessage,
+      recentMessages: input.recentMessages,
+    });
+
+    expect(steerPrompt).toContain("## このチャンネルの初期履歴");
+    expect(steerPrompt).toContain("recent-message-id");
+    expect(steerPrompt).toMatchSnapshot();
+  });
 });
 
-function createInput(): AiInput {
+function createInput(): {
+  channelName: string;
+  currentMessage: RuntimeMessage;
+  recentMessages: RuntimeMessage[];
+} {
   return {
     channelName: "channel-name",
     currentMessage: {

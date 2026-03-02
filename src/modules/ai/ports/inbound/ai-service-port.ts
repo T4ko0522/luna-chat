@@ -3,7 +3,7 @@ import type { RuntimeMessage } from "../../../conversation/domain/runtime-messag
 export type AiInput = {
   channelName: string;
   currentMessage: RuntimeMessage;
-  recentMessages: RuntimeMessage[];
+  loadRecentMessages: () => Promise<RuntimeMessage[]>;
 };
 
 export type HeartbeatInput = {

@@ -97,7 +97,7 @@ type LoggerLike = {
 export type GenerateReplyInput = {
   channelName: string;
   currentMessage: RuntimeMessage;
-  recentMessages: RuntimeMessage[];
+  loadRecentMessages: () => Promise<RuntimeMessage[]>;
 };
 
 export type ReplyGenerator = {
@@ -163,16 +163,17 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
     : () => undefined;
 
   try {
-    const recentMessages = await fetchRecentMessages({
-      attachmentStore: input.attachmentStore,
-      botUserId: input.botUserId,
-      logger: input.logger,
-      message,
-    });
     await input.aiService.generateReply({
       channelName: resolveChannelName(message.channel.name),
       currentMessage,
-      recentMessages,
+      loadRecentMessages: async () => {
+        return await fetchRecentMessages({
+          attachmentStore: input.attachmentStore,
+          botUserId: input.botUserId,
+          logger: input.logger,
+          message,
+        });
+      },
     });
   } catch (error: unknown) {
     input.logger.error("Failed to generate AI reply:", error);

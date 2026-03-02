@@ -3,12 +3,23 @@ import { resolve } from "node:path";
 
 import { formatMessageAuthorLabel } from "../../../shared/discord/message-author-label";
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
-import type { AiInput } from "../ports/inbound/ai-service-port";
 
 type PromptBundle = {
   instructions: string;
   developerRolePrompt: string;
   userRolePrompt: string;
+};
+
+type PromptBundleInput = {
+  channelName: string;
+  currentMessage: RuntimeMessage;
+  recentMessages: RuntimeMessage[];
+};
+
+type BuildSteerPromptInput = {
+  channelName: string;
+  message: RuntimeMessage;
+  recentMessages?: RuntimeMessage[];
 };
 
 const WORKSPACE_INSTRUCTION_FILES = ["LUNA.md", "SOUL.md"] as const;
@@ -18,25 +29,25 @@ const DEVELOPER_ROLE_PROMPT = [
 ].join("\n");
 
 export async function buildPromptBundle(
-  input: AiInput,
+  input: PromptBundleInput,
   workspaceDir: string,
 ): Promise<PromptBundle> {
   const instructions = await buildInstructions(workspaceDir);
   const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
-  const recentMessagesSection = recentMessages.length > 0 ? recentMessages.join("\n\n") : "(none)";
-
-  const userRolePrompt = [
-    "以下は現在の入力情報です。",
+  const userRolePromptLines = [
+    "新しいDiscordの投稿です。",
     `チャンネル名: ${input.channelName} (ID: ${input.currentMessage.channelId})`,
     "",
-    "## 直近のメッセージ",
-    "",
-    recentMessagesSection,
-    "",
+  ];
+  if (recentMessages.length > 0) {
+    userRolePromptLines.push("## 直近のメッセージ", "", recentMessages.join("\n\n"), "");
+  }
+  userRolePromptLines.push(
     "## 投稿されたメッセージ",
     "",
     formatRuntimeMessageForPrompt(input.currentMessage),
-  ].join("\n");
+  );
+  const userRolePrompt = userRolePromptLines.join("\n");
 
   return {
     developerRolePrompt: DEVELOPER_ROLE_PROMPT,
@@ -54,8 +65,22 @@ function formatRuntimeMessageForPrompt(message: RuntimeMessage): string {
   return [toQuotedBlock(formatRuntimeMessageBlock(message.replyTo)), messageBlock].join("\n");
 }
 
-export function buildSteerPrompt(message: RuntimeMessage): string {
-  return ["## 追加メッセージ", "", formatRuntimeMessageForPrompt(message)].join("\n");
+export function buildSteerPrompt(input: BuildSteerPromptInput): string {
+  const lines = [
+    "新しいDiscordの投稿です。",
+    `チャンネル名: ${input.channelName} (ID: ${input.message.channelId})`,
+    "",
+  ];
+
+  if (input.recentMessages !== undefined) {
+    const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
+    const recentMessagesSection =
+      recentMessages.length > 0 ? recentMessages.join("\n\n") : "(none)";
+    lines.push("## このチャンネルの初期履歴", "", recentMessagesSection, "");
+  }
+
+  lines.push("## 投稿されたメッセージ", "", formatRuntimeMessageForPrompt(input.message));
+  return lines.join("\n");
 }
 
 function formatRuntimeMessageBlock(
