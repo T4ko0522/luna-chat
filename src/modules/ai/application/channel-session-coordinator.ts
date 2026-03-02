@@ -12,6 +12,7 @@ import {
 import { buildThreadConfig } from "./thread-config-factory";
 
 type TimeoutHandle = ReturnType<typeof setTimeout>;
+type DiscordSessionKey = string;
 
 type ChannelSessionCoordinatorOptions = {
   createRuntime: () => AiRuntimePort;
@@ -41,9 +42,10 @@ type TurnLogContext =
     };
 
 type DiscordSession = {
+  key: DiscordSessionKey;
   threadId: string;
   opChain: Promise<void>;
-  injectedChannelIds: Set<string>;
+  injectedHistoryScopes: Set<string>;
   activeTurnId: string | undefined;
   activeTurnChannelIds: Set<string>;
   turnCompletion: Promise<void> | undefined;
@@ -70,7 +72,11 @@ export class ChannelSessionCoordinator implements AiService {
   private runtime: AiRuntimePort | undefined;
   private runtimeInitialization: Promise<AiRuntimePort> | undefined;
   private runtimeInitialized = false;
-  private discordSession: DiscordSession | undefined;
+  private readonly discordSessions = new Map<DiscordSessionKey, DiscordSession>();
+  private readonly discordSessionInitializations = new Map<
+    DiscordSessionKey,
+    Promise<DiscordSession>
+  >();
 
   constructor(private readonly options: ChannelSessionCoordinatorOptions) {
     this.sessionIdleMs = options.sessionIdleMs ?? DEFAULT_SESSION_IDLE_MS;
@@ -84,13 +90,14 @@ export class ChannelSessionCoordinator implements AiService {
   }
 
   async close(): Promise<void> {
-    await this.disposeDiscordSession();
+    this.disposeAllDiscordSessions();
     await this.resetRuntime();
   }
 
   async generateReply(input: AiInput): Promise<void> {
     try {
-      const session = await this.ensureDiscordSession();
+      const sessionKey = resolveDiscordSessionKey(input);
+      const session = await this.ensureDiscordSession(sessionKey);
       this.touchDiscordSession(session);
 
       const result = await this.enqueueSessionOperation(session, async () => {
@@ -152,16 +159,17 @@ export class ChannelSessionCoordinator implements AiService {
   ): Promise<{
     awaitCompletion?: Promise<void>;
   }> {
-    if (this.discordSession !== session) {
+    if (this.discordSessions.get(session.key) !== session) {
       return {};
     }
 
     const runtime = await this.ensureRuntime();
-    const includeRecentMessages = !session.injectedChannelIds.has(input.currentMessage.channelId);
+    const historyScope = resolveInitialHistoryScope(input);
+    const includeRecentMessages = !session.injectedHistoryScopes.has(historyScope);
     const recentMessages = includeRecentMessages ? await input.loadRecentMessages() : [];
 
     if (includeRecentMessages) {
-      session.injectedChannelIds.add(input.currentMessage.channelId);
+      session.injectedHistoryScopes.add(historyScope);
     }
 
     const threadId = session.threadId;
@@ -207,12 +215,27 @@ export class ChannelSessionCoordinator implements AiService {
     return session.turnCompletion ? { awaitCompletion: session.turnCompletion } : {};
   }
 
-  private async ensureDiscordSession(): Promise<DiscordSession> {
-    const existing = this.discordSession;
+  private async ensureDiscordSession(key: DiscordSessionKey): Promise<DiscordSession> {
+    const existing = this.discordSessions.get(key);
     if (existing) {
       return existing;
     }
 
+    const initializing = this.discordSessionInitializations.get(key);
+    if (initializing) {
+      return await initializing;
+    }
+
+    const initialization = this.createDiscordSession(key).finally(() => {
+      if (this.discordSessionInitializations.get(key) === initialization) {
+        this.discordSessionInitializations.delete(key);
+      }
+    });
+    this.discordSessionInitializations.set(key, initialization);
+    return await initialization;
+  }
+
+  private async createDiscordSession(key: DiscordSessionKey): Promise<DiscordSession> {
     const runtime = await this.ensureRuntime();
     const threadPromptBundle = await buildThreadPromptBundle(this.options.workspaceDir);
     const threadId = await runtime.startThread({
@@ -222,9 +245,10 @@ export class ChannelSessionCoordinator implements AiService {
     });
 
     const session: DiscordSession = {
+      key,
       threadId,
       opChain: Promise.resolve(),
-      injectedChannelIds: new Set(),
+      injectedHistoryScopes: new Set(),
       activeTurnId: undefined,
       activeTurnChannelIds: new Set(),
       turnCompletion: undefined,
@@ -232,7 +256,7 @@ export class ChannelSessionCoordinator implements AiService {
       lastMessageAt: this.now(),
       idleTimer: undefined,
     };
-    this.discordSession = session;
+    this.discordSessions.set(key, session);
     this.scheduleSessionIdleTimer(session);
 
     return session;
@@ -256,7 +280,7 @@ export class ChannelSessionCoordinator implements AiService {
 
   private async handleSessionIdleTimeout(session: DiscordSession): Promise<void> {
     await this.enqueueSessionOperation(session, async () => {
-      if (this.discordSession !== session) {
+      if (this.discordSessions.get(session.key) !== session) {
         return;
       }
 
@@ -270,7 +294,7 @@ export class ChannelSessionCoordinator implements AiService {
         return;
       }
 
-      await this.disposeDiscordSession(session);
+      this.disposeDiscordSession(session);
     });
   }
 
@@ -338,7 +362,7 @@ export class ChannelSessionCoordinator implements AiService {
         }
       })
       .finally(() => {
-        if (this.discordSession !== session) {
+        if (this.discordSessions.get(session.key) !== session) {
           return;
         }
         if (session.activeTurnId !== meta.turnId) {
@@ -355,7 +379,7 @@ export class ChannelSessionCoordinator implements AiService {
         }
 
         if (shouldDisposeSession || session.closeAfterTurn || this.isSessionIdleExpired(session)) {
-          void this.disposeDiscordSession(session);
+          this.disposeDiscordSession(session);
         }
       });
   }
@@ -409,7 +433,7 @@ export class ChannelSessionCoordinator implements AiService {
   }
 
   private async resetRuntimeAndSession(): Promise<void> {
-    await this.disposeDiscordSession();
+    this.disposeAllDiscordSessions();
     await this.resetRuntime();
   }
 
@@ -427,24 +451,27 @@ export class ChannelSessionCoordinator implements AiService {
     });
   }
 
-  private async disposeDiscordSession(session?: DiscordSession): Promise<void> {
-    const target = session ?? this.discordSession;
-    if (!target) {
-      return;
+  private disposeAllDiscordSessions(): void {
+    const sessions = Array.from(this.discordSessions.values());
+    for (const session of sessions) {
+      this.disposeDiscordSession(session);
+    }
+    this.discordSessionInitializations.clear();
+  }
+
+  private disposeDiscordSession(session: DiscordSession): void {
+    if (session.idleTimer) {
+      this.clearTimeoutFn(session.idleTimer);
+      session.idleTimer = undefined;
     }
 
-    if (target.idleTimer) {
-      this.clearTimeoutFn(target.idleTimer);
-      target.idleTimer = undefined;
-    }
+    session.activeTurnId = undefined;
+    session.turnCompletion = undefined;
+    session.activeTurnChannelIds.clear();
+    session.closeAfterTurn = false;
 
-    target.activeTurnId = undefined;
-    target.turnCompletion = undefined;
-    target.activeTurnChannelIds.clear();
-    target.closeAfterTurn = false;
-
-    if (this.discordSession === target) {
-      this.discordSession = undefined;
+    if (this.discordSessions.get(session.key) === session) {
+      this.discordSessions.delete(session.key);
     }
   }
 
@@ -469,6 +496,22 @@ function throwIfTurnFailed(turnResult: TurnResult): void {
 
   const errorMessage = turnResult.errorMessage ?? `app-server turn status is ${turnResult.status}`;
   throw new TurnFailedError(errorMessage);
+}
+
+function resolveDiscordSessionKey(input: AiInput): DiscordSessionKey {
+  if (input.context.kind === "dm") {
+    return `dm-user:${input.currentMessage.authorId}`;
+  }
+
+  return "channel:global";
+}
+
+function resolveInitialHistoryScope(input: AiInput): string {
+  if (input.context.kind === "dm") {
+    return `dm-user:${input.currentMessage.authorId}`;
+  }
+
+  return `channel:${input.currentMessage.channelId}`;
 }
 
 function createTurnObserver(context: TurnLogContext): TurnObserver {

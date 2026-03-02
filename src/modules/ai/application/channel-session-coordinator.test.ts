@@ -96,6 +96,156 @@ describe("ChannelSessionCoordinator", () => {
     expect(onDiscordTurnCompleted).toHaveBeenCalledWith("c2");
   });
 
+  it("DM は同一ユーザーなら同一threadを再利用する", async () => {
+    const runtime = new FakeAiRuntime();
+    const service = createService({
+      createRuntime: vi.fn(() => runtime),
+    });
+
+    const firstPromise = service.generateReply(
+      createAiInput("m1", "dm-channel-1", "first", {
+        authorId: "dm-user-1",
+        context: { kind: "dm" },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(1);
+    });
+    runtime.completeTurn("turn-1", createCompletedTurnResult());
+    await firstPromise;
+
+    const secondPromise = service.generateReply(
+      createAiInput("m2", "dm-channel-2", "second", {
+        authorId: "dm-user-1",
+        context: { kind: "dm" },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(2);
+    });
+    runtime.completeTurn("turn-2", createCompletedTurnResult());
+    await secondPromise;
+
+    expect(runtime.startThread).toHaveBeenCalledTimes(1);
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      1,
+      "thread-1",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      2,
+      "thread-1",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+  });
+
+  it("DM はユーザーごとに別threadを使う", async () => {
+    const runtime = new FakeAiRuntime();
+    const service = createService({
+      createRuntime: vi.fn(() => runtime),
+    });
+
+    const firstPromise = service.generateReply(
+      createAiInput("m1", "dm-channel-1", "first", {
+        authorId: "dm-user-1",
+        context: { kind: "dm" },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(1);
+    });
+    runtime.completeTurn("turn-1", createCompletedTurnResult());
+    await firstPromise;
+
+    const secondPromise = service.generateReply(
+      createAiInput("m2", "dm-channel-2", "second", {
+        authorId: "dm-user-2",
+        context: { kind: "dm" },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(2);
+    });
+    runtime.completeTurn("turn-2", createCompletedTurnResult());
+    await secondPromise;
+
+    expect(runtime.startThread).toHaveBeenCalledTimes(2);
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      1,
+      "thread-1",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      2,
+      "thread-2",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+  });
+
+  it("チャンネルとDMは別threadになる", async () => {
+    const runtime = new FakeAiRuntime();
+    const service = createService({
+      createRuntime: vi.fn(() => runtime),
+    });
+
+    const firstPromise = service.generateReply(createAiInput("m1", "c1", "channel-1"));
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(1);
+    });
+    runtime.completeTurn("turn-1", createCompletedTurnResult());
+    await firstPromise;
+
+    const secondPromise = service.generateReply(
+      createAiInput("m2", "dm-channel-1", "dm-1", {
+        authorId: "dm-user-1",
+        context: { kind: "dm" },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(2);
+    });
+    runtime.completeTurn("turn-2", createCompletedTurnResult());
+    await secondPromise;
+
+    const thirdPromise = service.generateReply(createAiInput("m3", "c2", "channel-2"));
+    await vi.waitFor(() => {
+      expect(runtime.startTurn).toHaveBeenCalledTimes(3);
+    });
+    runtime.completeTurn("turn-3", createCompletedTurnResult());
+    await thirdPromise;
+
+    expect(runtime.startThread).toHaveBeenCalledTimes(2);
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      1,
+      "thread-1",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      2,
+      "thread-2",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+    expect(runtime.startTurn).toHaveBeenNthCalledWith(
+      3,
+      "thread-1",
+      expect.any(String),
+      expect.any(Object),
+      { timeoutMs: 10 * 60_000 },
+    );
+  });
+
   it("チャンネル履歴は未注入チャンネルの初回のみ取得する", async () => {
     const runtime = new FakeAiRuntime();
     const service = createService({
@@ -133,6 +283,88 @@ describe("ChannelSessionCoordinator", () => {
     });
     runtime.completeTurn("turn-3", createCompletedTurnResult());
     await thirdPromise;
+  });
+
+  it("アイドルTTLはセッションごとに適用される", async () => {
+    vi.useFakeTimers();
+    try {
+      let now = 0;
+      const runtime = new FakeAiRuntime();
+      const service = createService({
+        createRuntime: vi.fn(() => runtime),
+        now: () => now,
+        sessionIdleMs: 1_000,
+      });
+
+      const channelFirst = service.generateReply(createAiInput("m1", "c1", "channel-1"));
+      await vi.waitFor(() => {
+        expect(runtime.startTurn).toHaveBeenCalledTimes(1);
+      });
+      runtime.completeTurn("turn-1", createCompletedTurnResult());
+      await channelFirst;
+
+      const dmFirst = service.generateReply(
+        createAiInput("m2", "dm-channel-1", "dm-1", {
+          authorId: "dm-user-1",
+          context: { kind: "dm" },
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(runtime.startTurn).toHaveBeenCalledTimes(2);
+      });
+      runtime.completeTurn("turn-2", createCompletedTurnResult());
+      await dmFirst;
+
+      now = 500;
+      await vi.advanceTimersByTimeAsync(500);
+
+      const channelSecond = service.generateReply(createAiInput("m3", "c2", "channel-2"));
+      await vi.waitFor(() => {
+        expect(runtime.startTurn).toHaveBeenCalledTimes(3);
+      });
+      runtime.completeTurn("turn-3", createCompletedTurnResult());
+      await channelSecond;
+
+      now = 1_000;
+      await vi.advanceTimersByTimeAsync(500);
+
+      const dmSecond = service.generateReply(
+        createAiInput("m4", "dm-channel-2", "dm-2", {
+          authorId: "dm-user-1",
+          context: { kind: "dm" },
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(runtime.startTurn).toHaveBeenCalledTimes(4);
+      });
+      runtime.completeTurn("turn-4", createCompletedTurnResult());
+      await dmSecond;
+
+      const channelThird = service.generateReply(createAiInput("m5", "c3", "channel-3"));
+      await vi.waitFor(() => {
+        expect(runtime.startTurn).toHaveBeenCalledTimes(5);
+      });
+      runtime.completeTurn("turn-5", createCompletedTurnResult());
+      await channelThird;
+
+      expect(runtime.startThread).toHaveBeenCalledTimes(3);
+      expect(runtime.startTurn).toHaveBeenNthCalledWith(
+        4,
+        "thread-3",
+        expect.any(String),
+        expect.any(Object),
+        { timeoutMs: 10 * 60_000 },
+      );
+      expect(runtime.startTurn).toHaveBeenNthCalledWith(
+        5,
+        "thread-1",
+        expect.any(String),
+        expect.any(Object),
+        { timeoutMs: 10 * 60_000 },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("1時間アイドルでセッションを閉じる", async () => {
@@ -371,6 +603,8 @@ function createAiInput(
   options: {
     replyTo?: RuntimeMessage["replyTo"];
     loadRecentMessages?: () => Promise<RuntimeMessage[]>;
+    context?: DiscordPromptContext;
+    authorId?: string;
   } = {},
 ): {
   context: DiscordPromptContext;
@@ -378,7 +612,7 @@ function createAiInput(
   loadRecentMessages: () => Promise<RuntimeMessage[]>;
 } {
   const currentMessage: RuntimeMessage = {
-    authorId: "author-id",
+    authorId: options.authorId ?? "author-id",
     authorIsBot: false,
     authorName: "author",
     channelId,
@@ -390,7 +624,7 @@ function createAiInput(
   };
 
   return {
-    context: {
+    context: options.context ?? {
       kind: "channel",
       channelName: `channel-${channelId}`,
     },

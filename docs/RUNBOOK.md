@@ -12,7 +12,7 @@
 3. `mentionedBot` は AI 入力へ含めるが、ハンドラで優先制御しない。
 4. スレッドは常に非対応。DM は `[discord].allow_dm` で有効/無効を切り替える。
 5. 会話ログ本文は永続保存しない。
-6. AI 入力には現在メッセージを必ず含め、セッション内で未注入チャンネルの場合のみ直近 10 件を追加する。
+6. AI 入力には現在メッセージを必ず含め、セッションキー内で未注入の履歴スコープの場合のみ直近 10 件を追加する（通常チャンネル投稿は `channelId` 単位、DM 投稿は `userId` 単位）。
 7. 追加履歴は `read_message_history` で都度取得できる（`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他指定）。
 8. AI は必要時に `start_typing` で入力中表示を開始でき、Discord turn 完了時に自動停止される。
 9. Bot 直接メンション時の自動 typing 送信も継続する。
@@ -28,7 +28,7 @@
 18. `cron.toml` の変更は再起動なしで反映し、不正設定時は前回有効スケジュールを維持する。
 19. `oneshot = true` の cron prompt は1回試行後に `cron.toml` から削除する。
 20. `codex app-server` は起動時に 1 回だけ起動し、Discord / heartbeat / cron prompt で共有する。
-21. Discord セッションは turn 完了後も保持し、最終メッセージから 1 時間新規メッセージがなければ閉じる（turn 実行中なら完了後に閉じる）。
+21. Discord セッションは turn 完了後も保持し、通常チャンネル投稿は許可チャンネル全体で 1 セッションを再利用し、DM 投稿は `userId` ごとに別セッションを再利用する。各セッションは最終メッセージから 1 時間新規メッセージがなければ閉じる（turn 実行中なら完了後に閉じる）。
 
 ## 3. 実行手順
 
@@ -57,7 +57,7 @@
 ### 3.3 運用時の基本挙動
 
 1. 受信イベントでチャンネル判定（スレッド除外、DMは`allow_dm`で判定、Guildは許可外除外）を実施する。
-2. 現在メッセージを AI に渡し、未注入チャンネルの場合のみ直近 10 件を初回注入する。
+2. 現在メッセージを AI に渡し、セッションキー内で未注入の履歴スコープの場合のみ直近 10 件を初回注入する（通常チャンネル投稿は `channelId` 単位、DM 投稿は `userId` 単位）。
 3. AI は必要時に `read_message_history` / `send_message` / `add_reaction` / `start_typing` / `list_channels` / `get_user_detail` を使用する。`send_message` は任意の `replyToMessageId` 指定時に返信投稿として送信する。MCP tool の応答はプレーンテキストで返る。
 4. AI エラー時は返信せず終了し、失敗ログを確認する。
 5. アプリケーションログは標準出力に加えて `$LUNA_HOME/logs/YYYYMMDD-HHmmss-SSS.log`（JSONL）にも出力される。

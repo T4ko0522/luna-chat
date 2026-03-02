@@ -10,7 +10,7 @@
 - 返信判定は `$LUNA_HOME/config.toml` の `[discord].allow_dm` + `[discord].allowed_channel_ids` + 非スレッドで行う（DMは `allow_dm` が `true` のときのみ処理）。
 - メンション有無は `mentionedBot` として保持するが、返信優先制御には使っていない。
 - Bot投稿は無視し、Guildでは許可チャンネル投稿、DMでは `allow_dm=true` の投稿を AI へ渡す。
-- AI 入力には現在メッセージを渡し、セッション内で未注入チャンネルの場合のみ直近 10 件履歴を初期投入する。
+- AI 入力には現在メッセージを渡し、セッションキー内で未注入の履歴スコープの場合のみ直近 10 件履歴を初期投入する（通常チャンネル投稿は `channelId` 単位、DM 投稿は `userId` 単位）。
 - AI 入力メッセージには、リアクションが存在する場合のみ絵文字別 `reactions` を含める（`selfReacted` はBot自身が該当絵文字でリアクション済みのときのみ付与）。
 - 追加履歴は MCP tool `read_message_history` で取得できる（1〜100件、未指定30件、`beforeMessageId` / `afterMessageId` / `aroundMessageId` は排他指定）。
 - `read_message_history` の返却メッセージにも、リアクションがある場合のみ `reactions` を含める。
@@ -55,8 +55,8 @@
 - 起動時に `templates/cron.toml` が `workspace/cron.toml` へ不足分のみ補完される（既存は上書きしない）。
 - Codex app-server は `codex app-server --listen stdio://` を使い、JSON-RPC で接続する。
 - Codex app-server プロセスは起動時に 1 回だけ起動し、Discord / heartbeat / cron prompt で共有する。
-- Discord は単一セッション（thread）を再利用し、turn 完了後も保持する。
-- Discord セッションは最終メッセージから 1 時間新規メッセージがない場合に閉じる（turn 実行中は完了後に閉じる）。
+- Discord は通常チャンネル投稿では許可チャンネル全体で 1 セッション（thread）を再利用し、DM 投稿では `userId` ごとに別セッション（thread）を再利用する。
+- Discord セッションは各セッション単位で最終メッセージから 1 時間新規メッセージがない場合に閉じる（turn 実行中は完了後に閉じる）。
 - `thread/start` は `ephemeral=true` / `personality="friendly"` を使用し、Discord MCP URLを `config.mcp_servers.discord.url` へ注入する。
 - server-initiated request のうち、approval 系は `decline` 応答、`requestUserInput` は辞退選択肢を返す。
 - Discord MCP サーバーは `http://127.0.0.1:<port>/mcp` で起動し、`read_message_history` / `send_message`（`channelId` または `userId` + 任意 `replyToMessageId`） / `add_reaction`（`channelId` または `userId`） / `start_typing`（`channelId` または `userId`） / `list_channels` / `get_user_detail` を提供する。
