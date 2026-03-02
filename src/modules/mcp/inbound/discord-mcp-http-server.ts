@@ -20,13 +20,14 @@ import { listChannelsTool } from "../application/tools/list-channels";
 import { readMessageHistory } from "../application/tools/read-message-history";
 import { sendMessageTool } from "../application/tools/send-message";
 import { startTypingTool } from "../application/tools/start-typing";
+import type { DiscordCommandTarget } from "../ports/outbound/discord-command-gateway-port";
 
-const TOKEN_ENV_NAME = "DISCORD_BOT_TOKEN";
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 100;
 const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_MCP_HOSTNAME = "127.0.0.1";
 export const DISCORD_MCP_PATH = "/mcp";
+const TARGET_INPUT_ERROR_MESSAGE = "channelId と userId のどちらか一方のみ指定してください。";
 
 const fetchHistoryInputSchema = z.object({
   beforeMessageId: z
@@ -44,28 +45,51 @@ const fetchHistoryInputSchema = z.object({
     .describe(`取得件数。1〜${MAX_HISTORY_LIMIT}。未指定時は${DEFAULT_HISTORY_LIMIT}。`),
 });
 
-const sendReplyInputSchema = z.object({
-  channelId: z.string().min(1).describe("送信先のDiscordチャンネルID。"),
-  replyToMessageId: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("返信先メッセージID。指定した場合は返信として投稿する。"),
-  text: z.string().min(1).describe("チャンネルに投稿するメッセージ本文。"),
-});
+const sendReplyInputSchema = z
+  .object({
+    channelId: z.string().min(1).optional().describe("送信先のDiscordチャンネルID。"),
+    userId: z.string().min(1).optional().describe("送信先ユーザーのDiscordユーザーID（DM）。"),
+    replyToMessageId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("返信先メッセージID。指定した場合は返信として投稿する。"),
+    text: z.string().min(1).describe("チャンネルに投稿するメッセージ本文。"),
+  })
+  .refine(hasExclusiveTarget, {
+    message: TARGET_INPUT_ERROR_MESSAGE,
+  });
 
-const addReactionInputSchema = z.object({
-  channelId: z.string().min(1).describe("リアクション対象メッセージのチャンネルID。"),
-  messageId: z.string().min(1).describe("リアクション対象のメッセージID。"),
-  emoji: z
-    .string()
-    .min(1)
-    .describe("付与する絵文字。Unicodeまたはカスタム絵文字（name:id）を指定する。"),
-});
+const addReactionInputSchema = z
+  .object({
+    channelId: z.string().min(1).optional().describe("リアクション対象メッセージのチャンネルID。"),
+    userId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("リアクション対象メッセージがあるDM相手のDiscordユーザーID。"),
+    messageId: z.string().min(1).describe("リアクション対象のメッセージID。"),
+    emoji: z
+      .string()
+      .min(1)
+      .describe("付与する絵文字。Unicodeまたはカスタム絵文字（name:id）を指定する。"),
+  })
+  .refine(hasExclusiveTarget, {
+    message: TARGET_INPUT_ERROR_MESSAGE,
+  });
 
-const startTypingInputSchema = z.object({
-  channelId: z.string().min(1).describe("入力中表示を開始するDiscordチャンネルID。"),
-});
+const startTypingInputSchema = z
+  .object({
+    channelId: z.string().min(1).optional().describe("入力中表示を開始するDiscordチャンネルID。"),
+    userId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("入力中表示を開始するDM相手のDiscordユーザーID。"),
+  })
+  .refine(hasExclusiveTarget, {
+    message: TARGET_INPUT_ERROR_MESSAGE,
+  });
 
 const listChannelsInputSchema = z.object({});
 
@@ -96,25 +120,22 @@ type StopTypingLoopInput = {
 type StartDiscordMcpServerOptions = {
   allowedChannelIds: ReadonlySet<string>;
   attachmentStore: DiscordAttachmentStore;
+  client: DiscordMcpClient;
   hostname?: string;
   port?: number;
-  token: string;
   typingLifecycleRegistry?: TypingLifecycleRegistry;
 };
+
+type DiscordMcpClient = Parameters<typeof createDiscordRestCommandGateway>[0] &
+  Parameters<typeof createDiscordRestHistoryGateway>[0];
 
 export async function startDiscordMcpServer(
   options: StartDiscordMcpServerOptions,
 ): Promise<DiscordMcpServerHandle> {
-  const token = options.token.trim();
-  if (!token) {
-    throw new Error(`${TOKEN_ENV_NAME} is required for discord MCP server.`);
-  }
-
   const hostname = options.hostname ?? DISCORD_MCP_HOSTNAME;
   const port = options.port ?? 0;
-  const rest = new REST({ version: "10" }).setToken(token);
-  const commandGateway = createDiscordRestCommandGateway(rest);
-  const historyGateway = createDiscordRestHistoryGateway(rest);
+  const commandGateway = createDiscordRestCommandGateway(options.client);
+  const historyGateway = createDiscordRestHistoryGateway(options.client);
   const typingRegistry = options.typingLifecycleRegistry ?? createTypingLifecycleRegistry();
   const mcpServer = new McpServer({
     name: "luna-chat-discord-mcp",
@@ -161,10 +182,13 @@ export async function startDiscordMcpServer(
       inputSchema: sendReplyInputSchema,
       title: "Discord送信",
     },
-    async ({ channelId, replyToMessageId, text }) => {
+    async ({ channelId, replyToMessageId, text, userId }) => {
       const payload = await sendMessageTool({
-        channelId,
         gateway: commandGateway,
+        target: toCommandTarget({
+          channelId,
+          userId,
+        }),
         text,
         ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
       });
@@ -183,12 +207,15 @@ export async function startDiscordMcpServer(
       inputSchema: addReactionInputSchema,
       title: "Discordリアクション追加",
     },
-    async ({ channelId, emoji, messageId }) => {
+    async ({ channelId, emoji, messageId, userId }) => {
       const payload = await addReactionTool({
-        channelId,
         emoji,
         gateway: commandGateway,
         messageId,
+        target: toCommandTarget({
+          channelId,
+          userId,
+        }),
       });
 
       return {
@@ -205,10 +232,13 @@ export async function startDiscordMcpServer(
       inputSchema: startTypingInputSchema,
       title: "Discord入力中表示開始",
     },
-    async ({ channelId }) => {
+    async ({ channelId, userId }) => {
       const payload = await startTypingTool({
-        channelId,
         gateway: commandGateway,
+        target: toCommandTarget({
+          channelId,
+          userId,
+        }),
         typingRegistry,
       });
 
@@ -293,6 +323,31 @@ export async function startDiscordMcpServer(
   };
 }
 
+function hasExclusiveTarget(input: {
+  channelId?: string | undefined;
+  userId?: string | undefined;
+}): boolean {
+  return (input.channelId === undefined) !== (input.userId === undefined);
+}
+
+function toCommandTarget(input: {
+  channelId?: string | undefined;
+  userId?: string | undefined;
+}): DiscordCommandTarget {
+  if (input.channelId !== undefined) {
+    return {
+      channelId: input.channelId,
+    };
+  }
+  if (input.userId !== undefined) {
+    return {
+      userId: input.userId,
+    };
+  }
+
+  throw new Error(TARGET_INPUT_ERROR_MESSAGE);
+}
+
 function createDiscordMcpServerUrl(hostname: string, port: number): string {
   const formattedHost = hostname.includes(":") ? `[${hostname}]` : hostname;
   return `http://${formattedHost}:${port}${DISCORD_MCP_PATH}`;
@@ -348,14 +403,37 @@ export async function sendMessage(
     text: string;
   },
 ): Promise<{ ok: true }> {
-  const commandGateway = createDiscordRestCommandGateway({
-    post: rest.post.bind(rest),
-    put: async () => {
-      throw new Error("put is not supported in sendMessage.");
+  const trimmedText = input.text.trim();
+  if (!trimmedText) {
+    throw new Error("text must not be empty.");
+  }
+
+  const trimmedReplyToMessageId = input.replyToMessageId?.trim();
+  if (input.replyToMessageId !== undefined && !trimmedReplyToMessageId) {
+    throw new Error("replyToMessageId must not be empty.");
+  }
+
+  await rest.post(Routes.channelMessages(input.channelId), {
+    body: {
+      allowed_mentions: {
+        parse: [],
+        ...(trimmedReplyToMessageId ? { replied_user: true } : {}),
+      },
+      content: trimmedText,
+      ...(trimmedReplyToMessageId
+        ? {
+            message_reference: {
+              fail_if_not_exists: false,
+              message_id: trimmedReplyToMessageId,
+            },
+          }
+        : {}),
     },
   });
 
-  return await commandGateway.sendMessage(input);
+  return {
+    ok: true,
+  };
 }
 
 export async function addMessageReaction(
@@ -366,14 +444,15 @@ export async function addMessageReaction(
     messageId: string;
   },
 ): Promise<{ ok: true }> {
-  const commandGateway = createDiscordRestCommandGateway({
-    post: async () => {
-      throw new Error("post is not supported in addMessageReaction.");
-    },
-    put: rest.put.bind(rest),
-  });
+  const trimmedEmoji = input.emoji.trim();
+  if (!trimmedEmoji) {
+    throw new Error("emoji must not be empty.");
+  }
 
-  return await commandGateway.addReaction(input);
+  await rest.put(Routes.channelMessageOwnReaction(input.channelId, input.messageId, trimmedEmoji));
+  return {
+    ok: true,
+  };
 }
 
 export async function startTypingLoop(

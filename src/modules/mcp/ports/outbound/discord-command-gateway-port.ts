@@ -1,4 +1,7 @@
+export type DiscordCommandTarget = { channelId: string } | { userId: string };
+
 export type DiscordCommandGateway = {
+  resolveChannelId: (target: DiscordCommandTarget) => Promise<string>;
   addReaction: (input: {
     channelId: string;
     emoji: string;

@@ -18,7 +18,7 @@
 - 本体コード: `luna-chat` リポジトリ。
 - ワークスペース: `$LUNA_HOME/workspace`（`LUNA.md` / `SOUL.md` / `HEARTBEAT.md` / `cron.toml`）。
 - 外部依存:
-  - Discord API（`discord.js` / REST）
+  - Discord API（`discord.js` Client / REST）
   - Codex CLI app-server（`codex app-server --listen stdio://`）
 
 ## 4. モジュール構成（実装準拠）
@@ -90,7 +90,7 @@
 - `src/modules/mcp/application/tools/*`
   - tool 単位のユースケース実装
 - `src/modules/mcp/adapters/outbound/discord/*`
-  - Discord REST 呼び出し（履歴取得・送信・リアクション・チャンネル参照・ユーザー参照）
+  - `discord.js` Client 経由の Discord 呼び出し（履歴取得・送信・リアクション・チャンネル参照・ユーザー参照）
 - `src/modules/mcp/ports/outbound/*`
   - MCP application から参照する Discord gateway ポート定義
 
@@ -246,5 +246,6 @@
 2. 初期文脈は直近10件、追加文脈は `read_message_history` で取得する。
 3. メンション有無は入力に含めるが優先制御には使わない。
 4. 返信・リアクション・追加履歴取得・AI主導typing・許可チャンネル一覧取得・ユーザー詳細取得は MCP tool 経由で実行する。
-5. `send_message.replyToMessageId` は任意指定とし、返信投稿を表現する。
-6. ワークスペース文書は読み込み対象だが、自動更新フローは未実装。
+5. `send_message` / `add_reaction` / `start_typing` は `channelId` または `userId`（DM）で対象を指定できる。
+6. `send_message.replyToMessageId` は任意指定とし、返信投稿を表現する。
+7. ワークスペース文書は読み込み対象だが、自動更新フローは未実装。

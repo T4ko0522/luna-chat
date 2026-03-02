@@ -1,15 +1,19 @@
 import type { TypingLifecycleRegistry } from "../../../typing/typing-lifecycle-registry";
-import type { DiscordCommandGateway } from "../../ports/outbound/discord-command-gateway-port";
+import type {
+  DiscordCommandGateway,
+  DiscordCommandTarget,
+} from "../../ports/outbound/discord-command-gateway-port";
 
 export async function startTypingTool(input: {
-  channelId: string;
   gateway: DiscordCommandGateway;
+  target: DiscordCommandTarget;
   typingRegistry: TypingLifecycleRegistry;
 }): Promise<{ alreadyRunning: boolean; ok: true }> {
+  const channelId = await input.gateway.resolveChannelId(input.target);
   return input.typingRegistry.start({
-    channelId: input.channelId,
+    channelId,
     sendTyping: async () => {
-      await input.gateway.sendTyping(input.channelId);
+      await input.gateway.sendTyping(channelId);
     },
     source: "tool",
   });

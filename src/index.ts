@@ -47,13 +47,14 @@ const client = new Client({
 });
 
 const runtimeConfig = await loadConfigOrExit();
+client.rest.setToken(runtimeConfig.discordBotToken);
 await initializeFileLoggingOrExit(runtimeConfig.logsDir);
 const typingLifecycleRegistry = createTypingLifecycleRegistry();
 const attachmentStore = new WorkspaceDiscordAttachmentStore(runtimeConfig.codexWorkspaceDir);
 const discordMcpServer = await startDiscordMcpServerOrExit(
   runtimeConfig.allowedChannelIds,
-  runtimeConfig.discordBotToken,
   attachmentStore,
+  client,
   typingLifecycleRegistry,
 );
 
@@ -168,15 +169,15 @@ async function initializeFileLoggingOrExit(logsDir: string): Promise<void> {
 
 async function startDiscordMcpServerOrExit(
   allowedChannelIds: ReadonlySet<string>,
-  token: string,
   attachmentStore: DiscordAttachmentStore,
+  client: Client,
   typingRegistry: ReturnType<typeof createTypingLifecycleRegistry>,
 ): Promise<DiscordMcpServerHandle> {
   try {
     const mcpServer = await startDiscordMcpServer({
       allowedChannelIds,
       attachmentStore,
-      token,
+      client,
       typingLifecycleRegistry: typingRegistry,
     });
     logger.info("Discord MCP server started.", {

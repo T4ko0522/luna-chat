@@ -1,4 +1,3 @@
-import type { REST } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -98,12 +97,29 @@ describe("parseDiscordGuildMember", () => {
 
 describe("createDiscordRestHistoryGateway", () => {
   it("403/404 のときは null を返して継続する", async () => {
-    const get: Pick<REST, "get">["get"] = vi.fn(async () => {
-      throw {
-        status: 403,
-      };
+    const gateway = createDiscordRestHistoryGateway({
+      channels: {
+        fetch: vi.fn(async () => {
+          throw {
+            status: 403,
+          };
+        }),
+      },
+      guilds: {
+        fetch: vi.fn(async () => {
+          throw {
+            status: 403,
+          };
+        }),
+      },
+      users: {
+        fetch: vi.fn(async () => {
+          throw {
+            status: 403,
+          };
+        }),
+      },
     });
-    const gateway = createDiscordRestHistoryGateway({ get });
 
     await expect(gateway.fetchChannelById("channel-1")).resolves.toBeNull();
     await expect(gateway.fetchGuildById("guild-1")).resolves.toBeNull();
@@ -117,10 +133,19 @@ describe("createDiscordRestHistoryGateway", () => {
   });
 
   it("403/404 以外のエラーは再送出する", async () => {
-    const get: Pick<REST, "get">["get"] = vi.fn(async () => {
-      throw new Error("boom");
+    const gateway = createDiscordRestHistoryGateway({
+      channels: {
+        fetch: vi.fn(async () => null),
+      },
+      guilds: {
+        fetch: vi.fn(async () => null),
+      },
+      users: {
+        fetch: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      },
     });
-    const gateway = createDiscordRestHistoryGateway({ get });
 
     await expect(gateway.fetchUserById("user-1")).rejects.toThrow("boom");
   });

@@ -24,21 +24,11 @@ afterEach(async () => {
 });
 
 describe("startDiscordMcpServer", () => {
-  it("throws when token is empty", async () => {
-    await expect(
-      startDiscordMcpServer({
-        allowedChannelIds: new Set(["channel-id"]),
-        attachmentStore: createAttachmentStoreStub(),
-        token: "   ",
-      }),
-    ).rejects.toThrow("DISCORD_BOT_TOKEN is required");
-  });
-
   it("starts server and returns /mcp url", async () => {
     const server = await startDiscordMcpServer({
       allowedChannelIds: new Set(["channel-id"]),
       attachmentStore: createAttachmentStoreStub(),
-      token: "dummy-token",
+      client: createDiscordClientStub(),
     });
     startedServers.push(server);
 
@@ -359,5 +349,22 @@ function createTypingRestClientStub() {
 function createAttachmentStoreStub(): DiscordAttachmentStore {
   return {
     saveAttachment: vi.fn(async () => "/tmp/attachment"),
+  };
+}
+
+function createDiscordClientStub() {
+  return {
+    channels: {
+      fetch: vi.fn(async () => null),
+    },
+    guilds: {
+      fetch: vi.fn(async () => null),
+    },
+    users: {
+      createDM: vi.fn(async () => ({
+        id: "dm-channel-id",
+      })),
+      fetch: vi.fn(async () => null),
+    },
   };
 }
