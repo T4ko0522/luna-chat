@@ -4,7 +4,11 @@ import type { TurnResult } from "../domain/turn-result";
 import type { AiInput, AiService, HeartbeatInput } from "../ports/inbound/ai-service-port";
 import type { AiRuntimePort, StartedTurn, TurnObserver } from "../ports/outbound/ai-runtime-port";
 
-import { buildHeartbeatPromptBundle, buildPromptBundle, buildSteerPrompt } from "./prompt-composer";
+import {
+  buildHeartbeatPromptBundle,
+  buildThreadPromptBundle,
+  buildUserRolePrompt,
+} from "./prompt-composer";
 import { buildThreadConfig } from "./thread-config-factory";
 
 type TimeoutHandle = ReturnType<typeof setTimeout>;
@@ -164,15 +168,15 @@ export class ChannelSessionCoordinator implements AiService {
 
     if (session.activeTurnId) {
       const expectedTurnId = session.activeTurnId;
-      const steerPrompt = buildSteerPrompt({
+      const userRolePrompt = buildUserRolePrompt({
         context: input.context,
-        message: input.currentMessage,
-        ...(includeRecentMessages ? { recentMessages } : {}),
+        currentMessage: input.currentMessage,
+        recentMessages,
       });
       session.activeTurnChannelIds.add(input.currentMessage.channelId);
 
       try {
-        await runtime.steerTurn(threadId, expectedTurnId, steerPrompt);
+        await runtime.steerTurn(threadId, expectedTurnId, userRolePrompt);
         return {};
       } catch {
         session.activeTurnChannelIds.delete(input.currentMessage.channelId);
@@ -181,26 +185,23 @@ export class ChannelSessionCoordinator implements AiService {
         await this.startDiscordTurn(session, runtime, {
           channelId: input.currentMessage.channelId,
           messageId: input.currentMessage.id,
-          prompt: steerPrompt,
+          prompt: userRolePrompt,
         });
 
         return session.turnCompletion ? { awaitCompletion: session.turnCompletion } : {};
       }
     }
 
-    const promptBundle = await buildPromptBundle(
-      {
-        context: input.context,
-        currentMessage: input.currentMessage,
-        recentMessages,
-      },
-      this.options.workspaceDir,
-    );
+    const userRolePrompt = buildUserRolePrompt({
+      context: input.context,
+      currentMessage: input.currentMessage,
+      recentMessages,
+    });
 
     await this.startDiscordTurn(session, runtime, {
       channelId: input.currentMessage.channelId,
       messageId: input.currentMessage.id,
-      prompt: promptBundle.userRolePrompt,
+      prompt: userRolePrompt,
     });
 
     return session.turnCompletion ? { awaitCompletion: session.turnCompletion } : {};
@@ -213,11 +214,11 @@ export class ChannelSessionCoordinator implements AiService {
     }
 
     const runtime = await this.ensureRuntime();
-    const promptBundle = await buildHeartbeatPromptBundle(this.options.workspaceDir, "");
+    const threadPromptBundle = await buildThreadPromptBundle(this.options.workspaceDir);
     const threadId = await runtime.startThread({
       config: buildThreadConfig(this.options.reasoningEffort, this.options.discordMcpServerUrl),
-      developerRolePrompt: promptBundle.developerRolePrompt,
-      instructions: promptBundle.instructions,
+      developerRolePrompt: threadPromptBundle.developerRolePrompt,
+      instructions: threadPromptBundle.instructions,
     });
 
     const session: DiscordSession = {

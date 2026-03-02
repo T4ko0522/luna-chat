@@ -5,22 +5,15 @@ import { formatMessageAuthorLabel } from "../../../shared/discord/message-author
 import type { RuntimeMessage } from "../../conversation/domain/runtime-message";
 import type { DiscordPromptContext } from "../ports/inbound/ai-service-port";
 
-type PromptBundle = {
+type ThreadPromptBundle = {
   instructions: string;
   developerRolePrompt: string;
-  userRolePrompt: string;
 };
 
-type PromptBundleInput = {
+type UserRolePromptInput = {
   context: DiscordPromptContext;
   currentMessage: RuntimeMessage;
   recentMessages: RuntimeMessage[];
-};
-
-type BuildSteerPromptInput = {
-  context: DiscordPromptContext;
-  message: RuntimeMessage;
-  recentMessages?: RuntimeMessage[];
 };
 
 const WORKSPACE_INSTRUCTION_FILES = ["LUNA.md", "SOUL.md"] as const;
@@ -29,11 +22,7 @@ const DEVELOPER_ROLE_PROMPT = [
   "思考に時間がかかる場合や複数回のツール呼び出し、Web検索などを行う場合は、必要に応じて`start_typing`を使って入力中表示を開始し、ユーザーに作業中であることを伝えること。",
 ].join("\n");
 
-export async function buildPromptBundle(
-  input: PromptBundleInput,
-  workspaceDir: string,
-): Promise<PromptBundle> {
-  const instructions = await buildInstructions(workspaceDir);
+export function buildUserRolePrompt(input: UserRolePromptInput): string {
   const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
   const userRolePromptLines = buildPromptHeaderLines(input.context, input.currentMessage);
   if (recentMessages.length > 0) {
@@ -44,13 +33,7 @@ export async function buildPromptBundle(
     "",
     formatRuntimeMessageForPrompt(input.currentMessage),
   );
-  const userRolePrompt = userRolePromptLines.join("\n");
-
-  return {
-    developerRolePrompt: DEVELOPER_ROLE_PROMPT,
-    instructions,
-    userRolePrompt,
-  };
+  return userRolePromptLines.join("\n");
 }
 
 function formatRuntimeMessageForPrompt(message: RuntimeMessage): string {
@@ -60,25 +43,6 @@ function formatRuntimeMessageForPrompt(message: RuntimeMessage): string {
   }
 
   return [toQuotedBlock(formatRuntimeMessageBlock(message.replyTo)), messageBlock].join("\n");
-}
-
-export function buildSteerPrompt(input: BuildSteerPromptInput): string {
-  const lines = buildPromptHeaderLines(input.context, input.message);
-
-  if (input.recentMessages !== undefined) {
-    const recentMessages = input.recentMessages.map(formatRuntimeMessageForPrompt);
-    const recentMessagesSection =
-      recentMessages.length > 0 ? recentMessages.join("\n\n") : "(none)";
-    lines.push(
-      input.context.kind === "dm" ? "## このDMの初期履歴" : "## このチャンネルの初期履歴",
-      "",
-      recentMessagesSection,
-      "",
-    );
-  }
-
-  lines.push("## 投稿されたメッセージ", "", formatRuntimeMessageForPrompt(input.message));
-  return lines.join("\n");
 }
 
 function formatRuntimeMessageBlock(
@@ -138,13 +102,21 @@ function formatRuntimeReactions(reactions: NonNullable<RuntimeMessage["reactions
 export async function buildHeartbeatPromptBundle(
   workspaceDir: string,
   prompt: string,
-): Promise<PromptBundle> {
+): Promise<ThreadPromptBundle & { userRolePrompt: string }> {
+  const threadPromptBundle = await buildThreadPromptBundle(workspaceDir);
+
+  return {
+    ...threadPromptBundle,
+    userRolePrompt: prompt,
+  };
+}
+
+export async function buildThreadPromptBundle(workspaceDir: string): Promise<ThreadPromptBundle> {
   const instructions = await buildInstructions(workspaceDir);
 
   return {
     developerRolePrompt: DEVELOPER_ROLE_PROMPT,
     instructions,
-    userRolePrompt: prompt,
   };
 }
 
