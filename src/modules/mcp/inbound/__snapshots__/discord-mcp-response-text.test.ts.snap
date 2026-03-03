@@ -11,6 +11,24 @@ new
 
 exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > add_reaction 1`] = `"OK"`;
 
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > get_repo_daily_changes 1`] = `
+"リポジトリ: https://github.com/owner/repo
+取得方法: pulled
+対象日: 2026-03-04 以降
+
+コミット (2件):
+- abc1234 feat: add feature (Alice, 2026-03-04T10:00:00+09:00)
+- def5678 fix: bug fix (Bob, 2026-03-04T09:30:00+09:00)"
+`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > get_repo_daily_changes_empty 1`] = `
+"リポジトリ: https://github.com/owner/repo
+取得方法: cloned
+対象日: 2026-03-04 以降
+
+対象期間のコミットはありません。"
+`;
+
 exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > get_user_detail 1`] = `
 "表示名: Alice
 ユーザー名: alice
@@ -23,6 +41,31 @@ Bot: false
 `;
 
 exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > list_channels 1`] = `"- general (ID: channel-1, Guild: Guild Name (ID: guild-1))"`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > read_repo_content 1`] = `
+"リポジトリ: https://github.com/owner/repo
+取得方法: pulled
+対象パス: src/
+ファイル数: 2 / 10（トラッキング対象）
+
+--- src/index.ts ---
+console.log('hello');
+
+--- src/utils.ts ---
+export const add = (a, b) => a + b;
+
+スキップされたファイル (1件):
+- src/large.bin"
+`;
+
+exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > read_repo_content_empty 1`] = `
+"リポジトリ: https://github.com/owner/repo
+取得方法: cloned
+対象パス: (全体)
+ファイル数: 0 / 0（トラッキング対象）
+
+対象ファイルはありません。"
+`;
 
 exports[`discord-mcp-response-text > 他ツールのレスポンスを整形する > send_message 1`] = `"OK"`;
 

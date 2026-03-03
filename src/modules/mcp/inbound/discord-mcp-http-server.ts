@@ -6,6 +6,9 @@ import { z } from "zod";
 
 import { logger } from "../../../shared/logger";
 import { appendAttachmentsToContent, type DiscordAttachmentStore } from "../../attachments";
+import { createChildProcessGitCommandGateway } from "../../git/adapters/outbound/child-process-git-command-gateway";
+import { getRepoDailyChangesTool } from "../../git/application/tools/get-repo-daily-changes";
+import { readRepoContentTool } from "../../git/application/tools/read-repo-content";
 import type { TypingLifecycleRegistry } from "../../typing/typing-lifecycle-registry";
 import { createTypingLifecycleRegistry } from "../../typing/typing-lifecycle-registry";
 import { createDiscordRestCommandGateway } from "../adapters/outbound/discord/discord-rest-command-gateway";
@@ -20,9 +23,11 @@ import type { DiscordCommandTarget } from "../ports/outbound/discord-command-gat
 
 import {
   formatAddReactionContent,
+  formatGetRepoDailyChangesContent,
   formatGetUserDetailContent,
   formatListChannelsContent,
   formatReadMessageHistoryContent,
+  formatReadRepoContentContent,
   formatSendMessageContent,
   formatStartTypingContent,
 } from "./discord-mcp-response-text";
@@ -118,6 +123,24 @@ const getUserDetailInputSchema = z.object({
   userId: z.string().min(1).describe("詳細を取得するDiscordユーザーID。"),
 });
 
+const getRepoDailyChangesInputSchema = z.object({
+  repoUrl: z.string().min(1).describe("GitリポジトリのURL（HTTPS形式）または owner/repo 形式"),
+  since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("取得開始日（YYYY-MM-DD）。未指定時は今日"),
+});
+
+const readRepoContentInputSchema = z.object({
+  repoUrl: z.string().min(1).describe("GitリポジトリのURL（HTTPS形式）または owner/repo 形式"),
+  path: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("レビュー対象のパス（ディレクトリまたはファイル）。未指定時はリポジトリ全体"),
+});
+
 export type DiscordMcpServerHandle = {
   close: () => Promise<void>;
   stopTypingByChannelId: (channelId: string) => void;
@@ -131,6 +154,7 @@ type StartDiscordMcpServerOptions = {
   hostname?: string;
   port?: number;
   typingLifecycleRegistry?: TypingLifecycleRegistry;
+  workspaceDir?: string;
 };
 
 type DiscordMcpClient = Parameters<typeof createDiscordRestCommandGateway>[0] &
@@ -322,6 +346,59 @@ export async function startDiscordMcpServer(
       };
     },
   );
+
+  if (options.workspaceDir !== undefined) {
+    const gitGateway = createChildProcessGitCommandGateway();
+    const workspaceDir = options.workspaceDir;
+
+    mcpServer.registerTool(
+      "get_repo_daily_changes",
+      {
+        description:
+          "指定したGitリポジトリをクローンまたは更新し、指定日以降のコミットログを取得する。",
+        inputSchema: getRepoDailyChangesInputSchema,
+        title: "Gitリポジトリ日次変更取得",
+      },
+      async ({ repoUrl, since }) => {
+        const payload = await getRepoDailyChangesTool({
+          gateway: gitGateway,
+          repoUrl,
+          workspaceDir,
+          ...(since === undefined ? {} : { since }),
+        });
+
+        return {
+          content: [
+            { text: formatGetRepoDailyChangesContent(payload), type: "text" },
+          ],
+        };
+      },
+    );
+
+    mcpServer.registerTool(
+      "read_repo_content",
+      {
+        description:
+          "指定したGitリポジトリをクローンまたは更新し、ファイル内容を取得してコードレビューに使用する。",
+        inputSchema: readRepoContentInputSchema,
+        title: "Gitリポジトリコンテンツ取得",
+      },
+      async ({ repoUrl, path }) => {
+        const payload = await readRepoContentTool({
+          gateway: gitGateway,
+          repoUrl,
+          workspaceDir,
+          ...(path === undefined ? {} : { path }),
+        });
+
+        return {
+          content: [
+            { text: formatReadRepoContentContent(payload), type: "text" },
+          ],
+        };
+      },
+    );
+  }
 
   const transport = new StreamableHTTPTransport();
   let connectPromise: Promise<void> | undefined;

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatAddReactionContent,
+  formatGetRepoDailyChangesContent,
   formatGetUserDetailContent,
   formatListChannelsContent,
   formatReadMessageHistoryContent,
+  formatReadRepoContentContent,
   formatSendMessageContent,
   formatStartTypingContent,
 } from "./discord-mcp-response-text";
@@ -76,6 +78,62 @@ describe("discord-mcp-response-text", () => {
     ).toMatchSnapshot("list_channels");
 
     expect(
+      formatGetRepoDailyChangesContent({
+        repoUrl: "https://github.com/owner/repo",
+        action: "pulled",
+        since: "2026-03-04",
+        commits: [
+          {
+            hash: "abc1234567890",
+            authorName: "Alice",
+            date: "2026-03-04T10:00:00+09:00",
+            subject: "feat: add feature",
+          },
+          {
+            hash: "def5678901234",
+            authorName: "Bob",
+            date: "2026-03-04T09:30:00+09:00",
+            subject: "fix: bug fix",
+          },
+        ],
+      }),
+    ).toMatchSnapshot("get_repo_daily_changes");
+
+    expect(
+      formatGetRepoDailyChangesContent({
+        repoUrl: "https://github.com/owner/repo",
+        action: "cloned",
+        since: "2026-03-04",
+        commits: [],
+      }),
+    ).toMatchSnapshot("get_repo_daily_changes_empty");
+
+    expect(
+      formatReadRepoContentContent({
+        repoUrl: "https://github.com/owner/repo",
+        action: "pulled",
+        path: "src/",
+        files: [
+          { path: "src/index.ts", content: "console.log('hello');" },
+          { path: "src/utils.ts", content: "export const add = (a, b) => a + b;" },
+        ],
+        skippedFiles: ["src/large.bin"],
+        totalTrackedFiles: 10,
+      }),
+    ).toMatchSnapshot("read_repo_content");
+
+    expect(
+      formatReadRepoContentContent({
+        repoUrl: "https://github.com/owner/repo",
+        action: "cloned",
+        path: undefined,
+        files: [],
+        skippedFiles: [],
+        totalTrackedFiles: 0,
+      }),
+    ).toMatchSnapshot("read_repo_content_empty");
+
+    expect(
       formatGetUserDetailContent({
         user: {
           avatar: null,
@@ -90,4 +148,5 @@ describe("discord-mcp-response-text", () => {
       }),
     ).toMatchSnapshot("get_user_detail");
   });
+
 });
