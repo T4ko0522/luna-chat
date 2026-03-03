@@ -118,6 +118,7 @@ type HandleMessageInput = {
   botUserId: string;
   allowedChannelIds: ReadonlySet<string>;
   allowDm: boolean;
+  blacklistedUserIds: ReadonlySet<string>;
   aiService: ReplyGenerator;
   logger: LoggerLike;
   typingLifecycleRegistry?: ReturnType<typeof createTypingLifecycleRegistry>;
@@ -138,6 +139,10 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
   const { message } = input;
   const typingLifecycleRegistry = input.typingLifecycleRegistry ?? defaultTypingLifecycleRegistry;
   if (message.author.id === input.botUserId) {
+    return;
+  }
+
+  if (input.blacklistedUserIds.has(message.author.id)) {
     return;
   }
 

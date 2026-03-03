@@ -76,6 +76,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -100,6 +101,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -148,6 +150,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -219,6 +222,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -241,6 +245,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: true,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -271,6 +276,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -299,6 +305,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger,
       message,
@@ -329,6 +336,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -376,6 +384,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -418,6 +427,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger,
       message,
@@ -451,6 +461,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -479,6 +490,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger,
       message,
@@ -516,6 +528,7 @@ describe("handleMessageCreate integration", () => {
         aiService,
         allowedChannelIds: new Set(["allowed"]),
         allowDm: false,
+        blacklistedUserIds: new Set<string>(),
         botUserId: "bot",
         logger: createLogger(),
         message,
@@ -549,6 +562,7 @@ describe("handleMessageCreate integration", () => {
         aiService,
         allowedChannelIds: new Set(["allowed"]),
         allowDm: false,
+        blacklistedUserIds: new Set<string>(),
         botUserId: "bot",
         logger: createLogger(),
         message,
@@ -577,6 +591,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger,
       message,
@@ -615,6 +630,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -651,6 +667,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger,
       message,
@@ -701,6 +718,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -747,6 +765,7 @@ describe("handleMessageCreate integration", () => {
       aiService,
       allowedChannelIds: new Set(["allowed"]),
       allowDm: false,
+      blacklistedUserIds: new Set(),
       botUserId: "bot",
       logger: createLogger(),
       message,
@@ -759,6 +778,52 @@ describe("handleMessageCreate integration", () => {
         }),
       }),
     );
+  });
+  it("ブラックリストユーザーは無反応", async () => {
+    const sendTyping = vi.fn(async () => undefined);
+    const message = createMessage({
+      authorId: "blocked-user",
+      sendTyping,
+    });
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
+    const aiService = createAiService(generateReply);
+    const attachmentStore = createAttachmentStore();
+
+    await handleMessageCreate({
+      attachmentStore,
+      aiService,
+      allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
+      blacklistedUserIds: new Set(["blocked-user"]),
+      botUserId: "bot",
+      logger: createLogger(),
+      message,
+    });
+
+    expect(generateReply).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+  });
+
+  it("ブラックリスト外ユーザーは通常処理される", async () => {
+    const message = createMessage({
+      authorId: "normal-user",
+    });
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
+    const aiService = createAiService(generateReply);
+    const attachmentStore = createAttachmentStore();
+
+    await handleMessageCreate({
+      attachmentStore,
+      aiService,
+      allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
+      blacklistedUserIds: new Set(["blocked-user"]),
+      botUserId: "bot",
+      logger: createLogger(),
+      message,
+    });
+
+    expect(generateReply).toHaveBeenCalledTimes(1);
   });
 });
 

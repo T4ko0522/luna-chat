@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseTOML } from "confbox";
 import { describe, expect, it } from "vitest";
 
-import { loadRuntimeConfig, RuntimeConfigError } from "./runtime-config";
+import { loadRuntimeConfig, RuntimeConfigError, updateBlacklistInConfigToml } from "./runtime-config";
 
 const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 const DEFAULT_AI_REASONING_EFFORT = "medium";
@@ -33,6 +33,9 @@ describe("loadRuntimeConfig", () => {
     expect(config.aiReasoningEffort).toBe(DEFAULT_AI_REASONING_EFFORT);
     expect(config.heartbeatCronTime).toBe(DEFAULT_HEARTBEAT_CRON_TIME);
     expect(config.timeZone).toBeUndefined();
+    expect(Array.from(config.adminUserIds)).toEqual([]);
+    expect(Array.from(config.blacklistedUserIds)).toEqual([]);
+    expect(config.configFilePath).toBe(resolve(lunaHomeDir, "config.toml"));
     expect(config.lunaHomeDir).toBe(resolve(lunaHomeDir));
     expect(config.codexWorkspaceDir).toBe(resolve(lunaHomeDir, "workspace"));
     expect(config.codexHomeDir).toBe(resolve(lunaHomeDir, "codex"));
@@ -219,6 +222,12 @@ describe("loadRuntimeConfig", () => {
         },
         heartbeat: {
           cron_time: DEFAULT_HEARTBEAT_CRON_TIME,
+        },
+        admin: {
+          user_ids: [],
+        },
+        blacklist: {
+          user_ids: [],
         },
       });
     } finally {
@@ -859,6 +868,92 @@ time_zone = "UTC"
       recursive: true,
     });
   });
+
+  it("admin.user_ids と blacklist.user_ids を読み込む", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+        admin: { userIds: ["admin1", " admin2 "] },
+        blacklist: { userIds: ["blocked1", " ", "blocked2"] },
+      }),
+    );
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(Array.from(config.adminUserIds)).toEqual(["admin1", "admin2"]);
+      expect(Array.from(config.blacklistedUserIds)).toEqual(["blocked1", "blocked2"]);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
+  it("admin/blacklist 未指定時はデフォルトで空配列になる", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+      }),
+    );
+
+    try {
+      const config = await loadRuntimeConfig({
+        LUNA_HOME: lunaHomeDir,
+        DISCORD_BOT_TOKEN: "token",
+      });
+
+      expect(Array.from(config.adminUserIds)).toEqual([]);
+      expect(Array.from(config.blacklistedUserIds)).toEqual([]);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+});
+
+describe("updateBlacklistInConfigToml", () => {
+  it("config.toml の blacklist.user_ids を書き換えて永続化する", async () => {
+    const lunaHomeDir = createTempLunaHomeDir();
+    await writeConfigToml(
+      lunaHomeDir,
+      createConfigToml({
+        allowedChannelIds: ["111"],
+        blacklist: { userIds: ["old-user"] },
+      }),
+    );
+    const configPath = resolve(lunaHomeDir, "config.toml");
+
+    try {
+      await updateBlacklistInConfigToml(configPath, ["new-user-1", "new-user-2"]);
+
+      const updatedToml = await readFile(configPath, "utf8");
+      const parsed = parseTOML(updatedToml) as Record<string, unknown>;
+      expect((parsed["blacklist"] as { user_ids: string[] }).user_ids).toEqual([
+        "new-user-1",
+        "new-user-2",
+      ]);
+      // 既存セクションが保持されていることを確認
+      expect(
+        (parsed["discord"] as { allowed_channel_ids: string[] }).allowed_channel_ids,
+      ).toEqual(["111"]);
+    } finally {
+      await rm(lunaHomeDir, {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
 });
 
 function createTempLunaHomeDir(): string {
@@ -876,6 +971,12 @@ function createConfigToml(input: {
     cronTime: string;
   };
   timeZone?: string;
+  admin?: {
+    userIds: string[];
+  };
+  blacklist?: {
+    userIds: string[];
+  };
 }): string {
   const channelIds = input.allowedChannelIds.map((channelId) => `"${channelId}"`).join(", ");
   const allowDm = input.allowDm ?? false;
@@ -887,6 +988,12 @@ function createConfigToml(input: {
     cronTime: DEFAULT_HEARTBEAT_CRON_TIME,
   };
   const timeZoneLine = input.timeZone === undefined ? "" : `time_zone = "${input.timeZone}"\n`;
+  const adminSection = input.admin
+    ? `\n[admin]\nuser_ids = [${input.admin.userIds.map((id) => `"${id}"`).join(", ")}]\n`
+    : "";
+  const blacklistSection = input.blacklist
+    ? `\n[blacklist]\nuser_ids = [${input.blacklist.userIds.map((id) => `"${id}"`).join(", ")}]\n`
+    : "";
   return (
     `${timeZoneLine}[discord]
 allowed_channel_ids = [${channelIds}]
@@ -898,7 +1005,7 @@ reasoning_effort = "${ai.reasoningEffort}"
 
 [heartbeat]
 cron_time = "${heartbeat.cronTime}"
-`.trimEnd() + "\n"
+${adminSection}${blacklistSection}`.trimEnd() + "\n"
   );
 }
 

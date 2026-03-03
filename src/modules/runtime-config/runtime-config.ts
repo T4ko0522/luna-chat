@@ -49,6 +49,12 @@ type RuntimeSettings = {
   heartbeat: {
     cron_time: string;
   };
+  admin: {
+    user_ids: string[];
+  };
+  blacklist: {
+    user_ids: string[];
+  };
 };
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
@@ -62,6 +68,12 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   },
   heartbeat: {
     cron_time: DEFAULT_HEARTBEAT_CRON_TIME,
+  },
+  admin: {
+    user_ids: [],
+  },
+  blacklist: {
+    user_ids: [],
   },
 };
 
@@ -82,6 +94,16 @@ const RuntimeSettingsSchema = z.looseObject({
       cron_time: z.string().trim().min(1).default(DEFAULT_HEARTBEAT_CRON_TIME),
     })
     .default(DEFAULT_RUNTIME_SETTINGS.heartbeat),
+  admin: z
+    .looseObject({
+      user_ids: z.array(z.string()).default([]),
+    })
+    .default(DEFAULT_RUNTIME_SETTINGS.admin),
+  blacklist: z
+    .looseObject({
+      user_ids: z.array(z.string()).default([]),
+    })
+    .default(DEFAULT_RUNTIME_SETTINGS.blacklist),
 });
 
 export type RuntimeConfig = {
@@ -96,6 +118,9 @@ export type RuntimeConfig = {
   codexHomeDir: string;
   codexWorkspaceDir: string;
   logsDir: string;
+  adminUserIds: ReadonlySet<string>;
+  blacklistedUserIds: ReadonlySet<string>;
+  configFilePath: string;
 };
 
 export class RuntimeConfigError extends Error {
@@ -147,6 +172,9 @@ export async function loadRuntimeConfig(
     codexWorkspaceDir,
     logsDir,
     discordBotToken,
+    adminUserIds: runtimeSettings.adminUserIds,
+    blacklistedUserIds: runtimeSettings.blacklistedUserIds,
+    configFilePath: configPath,
   };
 }
 
@@ -157,6 +185,8 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
   aiReasoningEffort: ReasoningEffort;
   heartbeatCronTime: string;
   timeZone: string | undefined;
+  adminUserIds: ReadonlySet<string>;
+  blacklistedUserIds: ReadonlySet<string>;
 } {
   const parseResult = RuntimeSettingsSchema.safeParse(rawConfig);
   if (!parseResult.success) {
@@ -177,6 +207,13 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
   const timeZone = parseResult.data.time_zone;
   validateHeartbeatSchedule(heartbeatCronTime, timeZone);
 
+  const adminUserIds = parseResult.data.admin.user_ids
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+  const blacklistedUserIds = parseResult.data.blacklist.user_ids
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+
   return {
     allowedChannelIds: new Set(allowedChannelIds),
     allowDm: parseResult.data.discord.allow_dm,
@@ -184,6 +221,8 @@ function parseRuntimeSettingsFromConfig(rawConfig: unknown): {
     aiReasoningEffort: parseResult.data.ai.reasoning_effort,
     heartbeatCronTime,
     timeZone,
+    adminUserIds: new Set(adminUserIds),
+    blacklistedUserIds: new Set(blacklistedUserIds),
   };
 }
 
@@ -396,6 +435,16 @@ async function detectPathType(path: string): Promise<"missing" | "file" | "non-f
   } catch {
     return "missing";
   }
+}
+
+export async function updateBlacklistInConfigToml(
+  configFilePath: string,
+  userIds: string[],
+): Promise<void> {
+  const config = await loadConfigToml(configFilePath);
+  const updatedConfig = isRecord(config) ? { ...config } : {};
+  updatedConfig["blacklist"] = { user_ids: userIds };
+  await writeFile(configFilePath, stringifyTOML(updatedConfig));
 }
 
 function hasNodeErrorCode(error: unknown, code: string): boolean {

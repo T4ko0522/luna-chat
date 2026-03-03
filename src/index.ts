@@ -2,6 +2,10 @@
 
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 
+import {
+  buildBlacklistCommand,
+  handleBlacklistCommand,
+} from "./modules/blacklist/discord-blacklist-command";
 import { CodexAiRuntime } from "./modules/ai/adapters/outbound/codex/codex-ai-runtime";
 import { ChannelSessionCoordinator } from "./modules/ai/application/channel-session-coordinator";
 import {
@@ -55,11 +59,13 @@ client.rest.setToken(runtimeConfig.discordBotToken);
 await initializeFileLoggingOrExit(runtimeConfig.logsDir);
 const typingLifecycleRegistry = createTypingLifecycleRegistry();
 const attachmentStore = new WorkspaceDiscordAttachmentStore(runtimeConfig.codexWorkspaceDir);
+const blacklistedUserIds = new Set(runtimeConfig.blacklistedUserIds);
 const discordMcpServer = await startDiscordMcpServerOrExit(
   runtimeConfig.allowedChannelIds,
   attachmentStore,
   client,
   typingLifecycleRegistry,
+  runtimeConfig.codexWorkspaceDir,
 );
 
 const aiService = new ChannelSessionCoordinator({
@@ -114,8 +120,31 @@ registerShutdownHooks({
   typingLifecycleRegistry,
 });
 
-client.on("clientReady", () => {
+client.on("clientReady", async (readyClient) => {
   logger.info("Bot is ready!");
+  try {
+    await readyClient.application.commands.set([buildBlacklistCommand()]);
+    logger.info("Slash commands registered.");
+  } catch (error: unknown) {
+    logger.error("Failed to register slash commands:", error);
+  }
+});
+
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
+  if (interaction.commandName === "blacklist") {
+    await handleBlacklistCommand({
+      interaction,
+      adminUserIds: runtimeConfig.adminUserIds,
+      blacklistedUserIds,
+      configFilePath: runtimeConfig.configFilePath,
+      logger,
+    }).catch((error: unknown) => {
+      logger.error("Failed to handle blacklist command:", error);
+    });
+  }
 });
 
 client.on("messageCreate", async (message) => {
@@ -129,6 +158,7 @@ client.on("messageCreate", async (message) => {
     aiService: discordAiService,
     allowedChannelIds: runtimeConfig.allowedChannelIds,
     allowDm: runtimeConfig.allowDm,
+    blacklistedUserIds,
     botUserId,
     logger,
     message,
@@ -180,6 +210,7 @@ async function startDiscordMcpServerOrExit(
   attachmentStore: DiscordAttachmentStore,
   client: Client,
   typingRegistry: ReturnType<typeof createTypingLifecycleRegistry>,
+  workspaceDir: string,
 ): Promise<DiscordMcpServerHandle> {
   try {
     const mcpServer = await startDiscordMcpServer({
@@ -187,6 +218,7 @@ async function startDiscordMcpServerOrExit(
       attachmentStore,
       client,
       typingLifecycleRegistry: typingRegistry,
+      workspaceDir,
     });
     logger.info("Discord MCP server started.", {
       url: mcpServer.url,
