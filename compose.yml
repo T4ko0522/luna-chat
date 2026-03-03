@@ -6,6 +6,6 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/home/node/.luna
+      - ./data:/mnt/data
     init: true
     restart: unless-stopped

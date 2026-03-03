@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 FROM node:24.13.1-trixie AS runtime
 
-RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends gosu rsync && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV LUNA_HOME=/home/node/.luna
@@ -41,6 +41,8 @@ COPY --from=build /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY templates ./templates
+RUN mkdir -p /home/node/.luna && chown node:node /home/node/.luna
+
 COPY entrypoint.sh /usr/local/bin/
 
 ENTRYPOINT ["entrypoint.sh"]
