@@ -27,19 +27,21 @@ RUN --mount=type=cache,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 FROM node:24.13.1-trixie AS runtime
 
+RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV LUNA_HOME=/home/node/.luna
 
 WORKDIR /app
 
-RUN git config --global user.name "Luna" && git config --global user.email "luna@s2n.tech"
+RUN gosu node git config --global user.name "Luna" && gosu node git config --global user.email "luna@s2n.tech"
 RUN npm install --global @openai/codex@0.106.0
 
 COPY --from=build /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY templates ./templates
+COPY entrypoint.sh /usr/local/bin/
 
-USER node
-
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["./dist/index.mjs"]
