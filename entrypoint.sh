@@ -15,6 +15,27 @@ sync_back() {
     rsync -a --delete "${LUNA_HOME}/" "${MOUNT_DIR}/"
   fi
 }
-trap sync_back EXIT INT TERM
 
-exec gosu node "$@"
+on_term() {
+  if [ -n "${child_pid:-}" ]; then
+    kill -TERM "${child_pid}" 2>/dev/null || true
+    set +e
+    wait "${child_pid}"
+    set -e
+  fi
+  sync_back
+  exit 0
+}
+
+trap on_term INT TERM
+
+gosu node "$@" &
+child_pid=$!
+
+set +e
+wait "${child_pid}"
+exit_code=$?
+set -e
+
+sync_back
+exit "${exit_code}"
