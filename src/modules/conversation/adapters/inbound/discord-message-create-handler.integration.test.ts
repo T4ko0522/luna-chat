@@ -261,10 +261,65 @@ describe("handleMessageCreate integration", () => {
     });
   });
 
-  it("スレッド投稿は無反応", async () => {
+  it("スレッドでメンションなし投稿は無反応", async () => {
     const sendTyping = vi.fn(async () => undefined);
     const message = createMessage({
       isThread: true,
+      parentChannelId: "allowed",
+      sendTyping,
+    });
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
+    const aiService = createAiService(generateReply);
+    const attachmentStore = createAttachmentStore();
+
+    await handleMessageCreate({
+      attachmentStore,
+      aiService,
+      allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
+      blacklistedUserIds: new Set(),
+      botUserId: "bot",
+      logger: createLogger(),
+      message,
+    });
+
+    expect(generateReply).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+  });
+
+  it("許可チャンネルのスレッドでメンション投稿は AI が呼び出される", async () => {
+    const sendTyping = vi.fn(async () => undefined);
+    const message = createMessage({
+      isThread: true,
+      parentChannelId: "allowed",
+      mentionBot: true,
+      sendTyping,
+    });
+    const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
+    const aiService = createAiService(generateReply);
+    const attachmentStore = createAttachmentStore();
+
+    await handleMessageCreate({
+      attachmentStore,
+      aiService,
+      allowedChannelIds: new Set(["allowed"]),
+      allowDm: false,
+      blacklistedUserIds: new Set(),
+      botUserId: "bot",
+      logger: createLogger(),
+      message,
+    });
+
+    expect(generateReply).toHaveBeenCalledTimes(1);
+    expect(sendTyping).toHaveBeenCalled();
+  });
+
+  it("許可外チャンネルのスレッドでメンション投稿は無反応", async () => {
+    const sendTyping = vi.fn(async () => undefined);
+    const message = createMessage({
+      isThread: true,
+      parentChannelId: "not-allowed",
+      mentionBot: true,
       sendTyping,
     });
     const generateReply = vi.fn<ReplyGenerator["generateReply"]>(async () => undefined);
@@ -842,6 +897,7 @@ function createMessage(input?: {
   inGuild?: boolean;
   isThread?: boolean;
   mentionBot?: boolean;
+  parentChannelId?: string | null;
   reactions?: ReactionLike[];
   referenceMessage?: HistoryMessageLike;
   referenceMessageId?: string;
@@ -873,6 +929,7 @@ function createMessage(input?: {
       },
     },
     name: input?.channelName === undefined ? "general" : input.channelName,
+    parentId: input?.parentChannelId ?? null,
   };
   if (input?.sendTyping) {
     channel.sendTyping = input.sendTyping;

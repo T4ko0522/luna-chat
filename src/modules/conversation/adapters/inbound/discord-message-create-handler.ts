@@ -71,6 +71,7 @@ export type MessageLike = {
   channel: {
     isThread: () => boolean;
     name?: string | null;
+    parentId?: string | null;
     sendTyping?: SendTyping;
     messages?: unknown;
   };
@@ -130,6 +131,8 @@ type ReplyPolicyInput = {
   channelId: string;
   isThread: boolean;
   isDm: boolean;
+  mentionedBot: boolean;
+  parentChannelId?: string | null;
 };
 
 const INITIAL_PROMPT_HISTORY_LIMIT = 10;
@@ -146,12 +149,15 @@ export async function handleMessageCreate(input: HandleMessageInput): Promise<vo
     return;
   }
 
+  const parentChannelId = message.channel.parentId;
   const policyDecision = evaluateReplyPolicy({
     allowedChannelIds: input.allowedChannelIds,
     allowDm: input.allowDm,
     channelId: message.channelId,
     isDm: !message.inGuild(),
     isThread: message.channel.isThread(),
+    mentionedBot: message.mentions.has(input.botUserId),
+    ...(parentChannelId !== undefined ? { parentChannelId } : {}),
   });
   if (!policyDecision.shouldHandle) {
     return;
@@ -207,7 +213,13 @@ function toSendTyping(
 
 function evaluateReplyPolicy(input: ReplyPolicyInput): { shouldHandle: boolean } {
   if (input.isThread) {
-    return { shouldHandle: false };
+    if (!input.mentionedBot) {
+      return { shouldHandle: false };
+    }
+    if (!input.parentChannelId || !input.allowedChannelIds.has(input.parentChannelId)) {
+      return { shouldHandle: false };
+    }
+    return { shouldHandle: true };
   }
 
   if (input.isDm) {
