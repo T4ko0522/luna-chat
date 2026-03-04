@@ -1,4 +1,5 @@
 import type { AskForApproval } from "../../../codex-generated/v2/AskForApproval";
+import type { GetAccountRateLimitsResponse } from "../../../codex-generated/v2/GetAccountRateLimitsResponse";
 import type { SandboxMode } from "../../../codex-generated/v2/SandboxMode";
 import type { ThreadStartParams } from "../../../codex-generated/v2/ThreadStartParams";
 import type { TurnStartParams } from "../../../codex-generated/v2/TurnStartParams";
@@ -124,6 +125,11 @@ export class CodexAiRuntime {
     };
 
     await this.rpcClient.request("turn/steer", params);
+  }
+
+  async getRateLimits(): Promise<GetAccountRateLimitsResponse> {
+    const result = await this.rpcClient.request("account/rateLimits/read", undefined);
+    return result as GetAccountRateLimitsResponse;
   }
 
   async close(): Promise<void> {

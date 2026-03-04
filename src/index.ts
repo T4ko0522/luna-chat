@@ -6,6 +6,10 @@ import {
   buildBlacklistCommand,
   handleBlacklistCommand,
 } from "./modules/blacklist/discord-blacklist-command";
+import {
+  buildUsageCommand,
+  handleUsageCommand,
+} from "./modules/usage/discord-usage-command";
 import { CodexAiRuntime } from "./modules/ai/adapters/outbound/codex/codex-ai-runtime";
 import { ChannelSessionCoordinator } from "./modules/ai/application/channel-session-coordinator";
 import {
@@ -123,7 +127,7 @@ registerShutdownHooks({
 client.on("clientReady", async (readyClient) => {
   logger.info("Bot is ready!");
   try {
-    await readyClient.application.commands.set([buildBlacklistCommand()]);
+    await readyClient.application.commands.set([buildBlacklistCommand(), buildUsageCommand()]);
     logger.info("Slash commands registered.");
   } catch (error: unknown) {
     logger.error("Failed to register slash commands:", error);
@@ -143,6 +147,14 @@ client.on("interactionCreate", async (interaction) => {
       logger,
     }).catch((error: unknown) => {
       logger.error("Failed to handle blacklist command:", error);
+    });
+  }
+  if (interaction.commandName === "usage") {
+    await handleUsageCommand({
+      interaction,
+      getRateLimits: () => aiService.getRateLimits(),
+    }).catch((error: unknown) => {
+      logger.error("Failed to handle usage command:", error);
     });
   }
 });

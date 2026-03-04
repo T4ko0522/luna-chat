@@ -43,7 +43,8 @@ type SupportedClientRequest =
   | Extract<ClientRequest, { method: "thread/start" }>
   | Extract<ClientRequest, { method: "turn/start" }>
   | Extract<ClientRequest, { method: "turn/steer" }>
-  | Extract<ClientRequest, { method: "turn/interrupt" }>;
+  | Extract<ClientRequest, { method: "turn/interrupt" }>
+  | Extract<ClientRequest, { method: "account/rateLimits/read" }>;
 
 type SupportedClientRequestMethod = SupportedClientRequest["method"];
 type SupportedClientRequestParams<M extends SupportedClientRequestMethod> = Extract<

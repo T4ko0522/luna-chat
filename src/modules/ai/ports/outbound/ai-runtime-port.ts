@@ -1,3 +1,4 @@
+import type { GetAccountRateLimitsResponse } from "../../codex-generated/v2/GetAccountRateLimitsResponse";
 import type { TurnResult } from "../../domain/turn-result";
 
 export type McpToolCallStartedEvent = {
@@ -27,6 +28,7 @@ export type StartedTurn = {
 
 export interface AiRuntimePort {
   close(): Promise<void>;
+  getRateLimits(): Promise<GetAccountRateLimitsResponse>;
   interruptTurn(threadId: string, turnId: string): Promise<void>;
   initialize(): Promise<void>;
   startThread(input: {

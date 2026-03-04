@@ -1,4 +1,5 @@
 import { logger } from "../../../shared/logger";
+import type { GetAccountRateLimitsResponse } from "../codex-generated/v2/GetAccountRateLimitsResponse";
 import type { ReasoningEffort } from "../codex-generated/ReasoningEffort";
 import type { TurnResult } from "../domain/turn-result";
 import type { AiInput, AiService, HeartbeatInput } from "../ports/inbound/ai-service-port";
@@ -87,6 +88,11 @@ export class ChannelSessionCoordinator implements AiService {
 
   async initializeRuntime(): Promise<void> {
     await this.ensureRuntime();
+  }
+
+  async getRateLimits(): Promise<GetAccountRateLimitsResponse> {
+    const runtime = await this.ensureRuntime();
+    return await runtime.getRateLimits();
   }
 
   async close(): Promise<void> {
